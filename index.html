@@ -1,0 +1,1473 @@
+<title>Kestrion</title>
+
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+/* Yerleşim: 1140px ölçü, geniş beyaz alan; bilgi yoğun bölümler ince çizgili
+   ızgaralarda. Derin teal kurumsal vurgu, kehribar yalnızca durum bildirir. */
+:root {
+  color-scheme: light;
+
+  --paper: #F2F5F7;
+  --surface: #FFFFFF;
+  --surface-2: #E9EEF2;
+  --line: #D4DCE3;
+  --line-soft: #E3E9EE;
+  --ink: #0E1922;
+  --ink-2: #33475A;
+  --muted: #5A6E7F;
+  --accent: #0D555F;
+  --accent-soft: #DCEAEC;
+  --signal: #9A6608;
+  --signal-bg: #F7EAD2;
+  --alarm: #A83A22;
+  --alarm-bg: #F7E2DC;
+  --ok: #2B6650;
+
+  --sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+
+  --wrap: 1140px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #0B1117;
+    --surface: #121B23;
+    --surface-2: #17222B;
+    --line: #26343F;
+    --line-soft: #1E2A34;
+    --ink: #E3EAEF;
+    --ink-2: #B4C4D0;
+    --muted: #869BAA;
+    --accent: #58B6C2;
+    --accent-soft: #10323A;
+    --signal: #E2A62E;
+    --signal-bg: #33280F;
+    --alarm: #E4694A;
+    --alarm-bg: #351C16;
+    --ok: #5FA684;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #0B1117;
+  --surface: #121B23;
+  --surface-2: #17222B;
+  --line: #26343F;
+  --line-soft: #1E2A34;
+  --ink: #E3EAEF;
+  --ink-2: #B4C4D0;
+  --muted: #869BAA;
+  --accent: #58B6C2;
+  --accent-soft: #10323A;
+  --signal: #E2A62E;
+  --signal-bg: #33280F;
+  --alarm: #E4694A;
+  --alarm-bg: #351C16;
+  --ok: #5FA684;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 { margin: 0; font-weight: 600; letter-spacing: -0.018em; text-wrap: balance; line-height: 1.18; }
+p { margin: 0; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+button { font-family: inherit; cursor: pointer; }
+.num { font-variant-numeric: tabular-nums; }
+
+.wrap { width: 100%; max-width: var(--wrap); margin: 0 auto; padding-inline: 22px; }
+
+/* ---------- üst çubuk ---------- */
+.bar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30;
+  background: color-mix(in srgb, var(--paper) 90%, transparent);
+  backdrop-filter: saturate(140%) blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.bar-in { display: flex; align-items: center; gap: 18px; padding-block: 14px; }
+.logo { font-weight: 600; font-size: 19px; letter-spacing: .14em; white-space: nowrap; }
+.logo b { font-weight: 600; color: var(--accent); }
+.bar nav { display: none; gap: 26px; margin-left: auto; font-size: 14.5px; color: var(--muted); }
+.bar nav a { text-decoration: none; }
+.bar nav a:hover { color: var(--ink); }
+@media (min-width: 900px) { .bar nav { display: flex; } }
+
+.btn {
+  display: inline-block; background: var(--accent); color: var(--surface);
+  border: 1px solid var(--accent); padding: 12px 20px; font-weight: 500; font-size: 15.5px;
+  text-decoration: none; text-align: center; border-radius: 2px;
+}
+:root[data-theme="dark"] .btn, :root:not([data-theme="light"]) .btn { color: var(--paper); }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .btn { color: #fff; } }
+.btn:hover { background: color-mix(in srgb, var(--accent) 86%, var(--ink)); }
+.btn.sm { padding: 9px 15px; font-size: 14.5px; margin-left: auto; }
+@media (min-width: 900px) { .btn.sm { margin-left: 0; } }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn.ghost:hover { background: var(--surface); border-color: var(--muted); }
+
+/* ---------- bölüm iskeleti ---------- */
+section { padding-block: 60px; }
+@media (min-width: 900px) { section { padding-block: 92px; } }
+.band { background: var(--surface); border-block: 1px solid var(--line); }
+.kicker {
+  font-family: var(--mono); font-size: 11.5px; color: var(--accent);
+  letter-spacing: .16em; margin-bottom: 16px;
+}
+h2 { font-size: clamp(26px, 4.4vw, 38px); }
+.lead { color: var(--muted); max-width: 66ch; margin-top: 14px; font-size: 17.5px; }
+.head-row { display: grid; gap: 18px; }
+@media (min-width: 980px) {
+  .head-row { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 48px; align-items: end; }
+  .head-row .lead { margin-top: 0; }
+}
+
+/* ---------- hero ---------- */
+.hero { padding-block: 52px 60px; }
+@media (min-width: 980px) {
+  .hero { padding-block: 84px 92px; }
+  .hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 480px); gap: 60px; align-items: start; }
+}
+.hero h1 { font-size: clamp(34px, 6.1vw, 56px); font-weight: 700; letter-spacing: -0.03em; line-height: 1.04; }
+.hero .lead { font-size: 19px; max-width: 54ch; }
+.cta-row { display: flex; flex-wrap: wrap; gap: 11px; margin-top: 30px; }
+.note { color: var(--muted); font-size: 13.5px; margin-top: 16px; }
+.eyebrow {
+  display: inline-block; font-family: var(--mono); font-size: 11.5px; letter-spacing: .14em;
+  color: var(--accent); background: var(--accent-soft); padding: 5px 11px; margin-bottom: 22px;
+}
+
+/* ---------- veri yüzeyi (hero paneli) ---------- */
+.panel { background: var(--surface); border: 1px solid var(--line); min-width: 0; }
+.panel-head {
+  display: flex; align-items: center; gap: 10px; padding: 13px 16px;
+  border-bottom: 1px solid var(--line); font-family: var(--mono);
+  font-size: 11px; letter-spacing: .1em; color: var(--muted);
+}
+.panel-head b { color: var(--ink); font-weight: 500; letter-spacing: .04em; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
+.dot.warn { background: var(--signal); } .dot.bad { background: var(--alarm); }
+
+.site-row {
+  display: grid; grid-template-columns: 1fr auto; gap: 4px 14px;
+  padding: 14px 16px; border-bottom: 1px solid var(--line-soft); align-items: baseline;
+}
+.site-row:last-of-type { border-bottom: 0; }
+.site-name { font-weight: 500; font-size: 15.5px; display: flex; align-items: center; gap: 9px; }
+.site-meta { font-family: var(--mono); font-size: 11.5px; color: var(--muted); grid-column: 1; }
+.site-stat { font-family: var(--mono); font-size: 13px; color: var(--ink-2); text-align: right; }
+.site-stat em { font-style: normal; color: var(--alarm); }
+.site-stat.quiet { color: var(--muted); }
+
+.spark { display: flex; align-items: flex-end; gap: 2px; height: 30px; grid-column: 1 / -1; margin-top: 8px; }
+.spark i { flex: 1; background: var(--accent-soft); border-top: 2px solid var(--accent); min-height: 2px; }
+.spark i.peak { border-top-color: var(--signal); background: var(--signal-bg); }
+.panel-foot {
+  padding: 11px 16px; border-top: 1px solid var(--line); background: var(--surface-2);
+  font-family: var(--mono); font-size: 11px; color: var(--muted); display: flex;
+  justify-content: space-between; gap: 10px; flex-wrap: wrap;
+}
+
+/* ---------- rakam şeridi ---------- */
+.metrics { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+@media (min-width: 720px) { .metrics { grid-template-columns: repeat(4, 1fr); } }
+.metric { background: var(--surface); padding: 20px 18px; }
+.metric b { display: block; font-size: 15.5px; font-weight: 600; margin-bottom: 5px; }
+.metric span { color: var(--muted); font-size: 14px; }
+
+/* ---------- adımlar ---------- */
+.steps { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); margin-top: 40px; }
+@media (min-width: 900px) { .steps { grid-template-columns: repeat(4, 1fr); } }
+.step { background: var(--surface); padding: 24px 20px; min-width: 0; }
+.step-n {
+  font-family: var(--mono); font-size: 11px; color: var(--accent);
+  letter-spacing: .12em; padding-bottom: 12px; margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.step h3 { font-size: 18.5px; margin-bottom: 8px; }
+.step p { color: var(--muted); font-size: 14.5px; }
+
+/* ---------- iki kolon ---------- */
+.split { display: grid; gap: 34px; margin-top: 40px; align-items: start; }
+@media (min-width: 980px) { .split { grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 52px; } }
+
+.points { display: grid; gap: 26px; }
+.point { border-left: 2px solid var(--line); padding-left: 18px; }
+.point h3 { font-size: 18.5px; margin-bottom: 6px; }
+.point p { color: var(--muted); font-size: 15px; }
+
+/* ---------- rapor ---------- */
+.doc { background: var(--surface); border: 1px solid var(--line); padding: 26px 24px; min-width: 0; }
+.doc-title { font-size: 22px; font-weight: 600; }
+.doc-stamp {
+  font-family: var(--mono); font-size: 11px; color: var(--muted);
+  margin: 8px 0 22px; padding-bottom: 16px; border-bottom: 1px solid var(--line);
+  letter-spacing: .04em;
+}
+.doc h4 {
+  font-family: var(--mono); font-size: 11.5px; letter-spacing: .13em; color: var(--accent);
+  margin: 24px 0 9px; font-weight: 500;
+}
+.doc h4:first-of-type { margin-top: 0; }
+.doc p, .doc li { font-size: 15px; color: var(--ink-2); }
+.doc ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
+.doc .flag {
+  background: var(--alarm-bg); border-left: 2px solid var(--alarm);
+  padding: 12px 14px; font-size: 14.5px;
+}
+.doc .flag b { color: var(--ink); font-weight: 600; }
+.doc-foot {
+  margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--line);
+  font-family: var(--mono); font-size: 10.5px; color: var(--muted); letter-spacing: .05em;
+}
+
+/* ---------- kurulum tablosu ---------- */
+.tablewrap { overflow-x: auto; margin-top: 36px; border: 1px solid var(--line); background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 14.5px; }
+th, td { text-align: left; padding: 15px 18px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+thead th {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--muted);
+  font-weight: 500; background: var(--surface-2); border-bottom: 1px solid var(--line);
+}
+tbody th { font-weight: 500; color: var(--ink); width: 27%; }
+td { color: var(--muted); }
+tbody tr:last-child th, tbody tr:last-child td { border-bottom: 0; }
+
+/* ---------- uyum ızgarası ---------- */
+.grid3 { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); margin-top: 40px; }
+@media (min-width: 680px) { .grid3 { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1000px) { .grid3 { grid-template-columns: repeat(3, 1fr); } }
+.cell { background: var(--surface); padding: 24px 20px; min-width: 0; }
+.cell h3 { font-size: 17.5px; margin-bottom: 8px; }
+.cell p { color: var(--muted); font-size: 14.5px; }
+.cell .tag {
+  display: inline-block; font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em;
+  color: var(--muted); border: 1px solid var(--line); padding: 3px 8px; margin-bottom: 13px;
+}
+
+/* ---------- ortaklık ---------- */
+.partner { background: var(--accent); color: #fff; padding: 44px 0; }
+:root[data-theme="dark"] .partner, :root:not([data-theme="light"]) .partner { color: var(--paper); }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .partner { color: #fff; } }
+.partner h2 { color: inherit; }
+.partner .kicker { color: color-mix(in srgb, currentColor 72%, transparent); }
+.partner .lead { color: color-mix(in srgb, currentColor 84%, transparent); }
+.partner-grid { display: grid; gap: 22px; margin-top: 34px; }
+@media (min-width: 820px) { .partner-grid { grid-template-columns: repeat(3, 1fr); } }
+.partner-item { border-top: 2px solid color-mix(in srgb, currentColor 45%, transparent); padding-top: 16px; }
+.partner-item h3 { font-size: 18px; margin-bottom: 7px; color: inherit; }
+.partner-item p { font-size: 14.5px; color: color-mix(in srgb, currentColor 80%, transparent); }
+.partner .btn {
+  background: var(--surface); color: var(--accent); border-color: var(--surface); margin-top: 30px;
+}
+.partner .btn:hover { background: color-mix(in srgb, var(--surface) 88%, var(--ink)); }
+
+/* ---------- paketler ---------- */
+.plans { display: grid; gap: 16px; margin-top: 40px; }
+@media (min-width: 880px) { .plans { grid-template-columns: repeat(3, 1fr); } }
+.plan {
+  background: var(--surface); border: 1px solid var(--line); padding: 26px 22px;
+  display: flex; flex-direction: column; min-width: 0;
+}
+.plan.pick { border-color: var(--accent); box-shadow: inset 0 3px 0 var(--accent); }
+.plan-name { font-size: 21px; font-weight: 600; }
+.plan-for { color: var(--muted); font-size: 14px; margin-top: 5px; min-height: 42px; }
+.plan-scale {
+  font-family: var(--mono); font-size: 12px; letter-spacing: .08em; color: var(--accent);
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  padding: 12px 0; margin: 18px 0 20px;
+}
+.plan ul { list-style: none; margin: 0 0 26px; padding: 0; display: grid; gap: 10px; font-size: 14.5px; color: var(--ink-2); }
+.plan li { display: grid; grid-template-columns: 15px 1fr; gap: 10px; }
+.plan li::before { content: ""; width: 6px; height: 6px; background: var(--accent); margin: 9px 0 0 4px; }
+.plan .btn { margin-top: auto; }
+
+/* ---------- SSS ---------- */
+.faq { margin-top: 36px; border-top: 1px solid var(--line); }
+.faq details { border-bottom: 1px solid var(--line); }
+.faq summary {
+  cursor: pointer; list-style: none; padding: 19px 38px 19px 0; position: relative;
+  font-size: 18px; font-weight: 500;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after {
+  content: ""; position: absolute; right: 8px; top: 27px; width: 9px; height: 9px;
+  border-right: 1.6px solid var(--accent); border-bottom: 1.6px solid var(--accent);
+  transform: rotate(45deg); transform-origin: center;
+}
+.faq details[open] summary::after { transform: rotate(-135deg); top: 30px; }
+.faq p { color: var(--muted); font-size: 15.5px; padding-bottom: 22px; max-width: 74ch; }
+
+/* ---------- kapanış ---------- */
+.close-grid { display: grid; gap: 30px; }
+@media (min-width: 900px) { .close-grid { grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); gap: 56px; align-items: start; } }
+.contact { background: var(--surface); border: 1px solid var(--line); padding: 26px 24px; }
+.contact h3 { font-size: 18px; margin-bottom: 16px; }
+.contact dl { margin: 0; display: grid; gap: 16px; }
+.contact dt { font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; color: var(--muted); margin-bottom: 3px; }
+.contact dd { margin: 0; font-size: 15.5px; user-select: all; }
+.pilot { display: grid; gap: 14px; margin-top: 26px; }
+.pilot-step { display: grid; grid-template-columns: 30px 1fr; gap: 14px; font-size: 15px; color: var(--muted); }
+.pilot-step b {
+  font-family: var(--mono); font-size: 12px; color: var(--accent); font-weight: 500;
+  border: 1px solid var(--line); width: 26px; height: 26px; display: grid; place-items: center;
+}
+.pilot-step span b { border: 0; width: auto; height: auto; display: inline; color: var(--ink); font-family: var(--sans); font-size: inherit; font-weight: 600; }
+
+footer { border-top: 1px solid var(--line); padding-block: 30px 38px; color: var(--muted); font-size: 13.5px; }
+.foot-in { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+.foot-in .logo { font-size: 16px; color: var(--ink); }
+.theme-btn {
+  margin-left: auto; background: none; border: 1px solid var(--line); color: var(--muted);
+  padding: 8px 13px; font-size: 13px; border-radius: 2px;
+}
+.theme-btn:hover { color: var(--ink); border-color: var(--muted); }
+
+/* ===================== görseller ===================== */
+/* Isı basamakları: tek hue, açıktan koyuya (sequential ramp). */
+:root {
+  --h1: #DAEEF2; --h2: #ADDBE3; --h3: #74C0CE; --h4: #319FB4; --h5: #0E7A8C;
+  --mark: #0E93AE; --mark-peak: #9A6608;
+  --slab: #E4E9ED; --slab-l: #CBD4DB; --slab-r: #D9E0E5;
+  --iso-line: #B9C4CD; --shaft: #C9DDE2;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --h1: #16343C; --h2: #1C4C58; --h3: #1F6B7B; --h4: #1F8A9F; --h5: #2BA8BE;
+    --mark: #1793A6; --mark-peak: #BE8A1E;
+    --slab: #1A242C; --slab-l: #121A21; --slab-r: #162027;
+    --iso-line: #2C3A44; --shaft: #16323A;
+  }
+}
+:root[data-theme="dark"] {
+  --h1: #16343C; --h2: #1C4C58; --h3: #1F6B7B; --h4: #1F8A9F; --h5: #2BA8BE;
+  --mark: #1793A6; --mark-peak: #BE8A1E;
+  --slab: #1A242C; --slab-l: #121A21; --slab-r: #162027;
+  --iso-line: #2C3A44; --shaft: #16323A;
+}
+
+/* --- izometrik bina --- */
+.iso-wrap { position: relative; }
+.iso { width: 100%; height: auto; max-width: 100%; display: block; overflow: visible; }
+.iso .slab { fill: var(--slab); }
+.iso .slab-l { fill: var(--slab-l); }
+.iso .slab-r { fill: var(--slab-r); }
+.iso .shaft { fill: var(--shaft); opacity: .5; }
+.iso .shaft-side { fill: var(--shaft); opacity: .3; }
+.iso .room { fill: var(--h1); }
+.iso .room.h1 { fill: var(--h1); } .iso .room.h2 { fill: var(--h2); }
+.iso .room.h3 { fill: var(--h3); } .iso .room.h4 { fill: var(--h4); }
+.iso .room.h5 { fill: var(--h5); }
+.iso .room.off { fill: var(--slab-l); }
+.iso .room-line { fill: none; stroke: var(--iso-line); stroke-width: 1; }
+.iso .cam circle { fill: var(--accent); }
+.iso .cam line { stroke: var(--iso-line); stroke-width: 1.2; }
+.iso .cam-down circle { fill: var(--alarm); }
+.iso .cam-down line { stroke: var(--alarm); stroke-width: 1.2; }
+.iso .cam-down .ping { fill: none; stroke: var(--alarm); stroke-width: 1.5; }
+.iso .floor-tag text {
+  font-family: var(--mono); font-size: 13px; font-weight: 500; fill: var(--ink);
+  text-anchor: end;
+}
+.iso .floor-tag .sub { font-size: 8px; fill: var(--muted); letter-spacing: .08em; }
+.iso .peak-label line { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 2; }
+.iso .peak-label text { font-family: var(--sans); font-size: 12px; font-weight: 600; fill: var(--ink); }
+.iso .peak-label .sub { font-family: var(--mono); font-size: 9px; font-weight: 400; fill: var(--muted); letter-spacing: .06em; }
+.iso .route { fill: none; stroke: var(--mark-peak); stroke-width: 1.6; stroke-dasharray: 4 3; opacity: .8; }
+.iso .route-node { fill: var(--mark-peak); }
+.iso .tracer { fill: var(--mark-peak); stroke: var(--surface); stroke-width: 2; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .iso .room { animation: heatin .8s ease-out var(--d, 0s) both; }
+  .iso .cam-down .ping { animation: ping 2.4s ease-out infinite; transform-origin: center; }
+  .iso .tracer { animation: trace 9s linear infinite; }
+}
+@media (prefers-reduced-motion: reduce) { .iso .tracer { display: none; } }
+@keyframes heatin { from { opacity: .25 } to { opacity: 1 } }
+@keyframes ping { 0% { opacity: .9; transform: scale(.5) } 70%,100% { opacity: 0; transform: scale(2.1) } }
+@keyframes trace{0%{transform:translate(196.0px,262.0px)}34%{transform:translate(271.0px,359.5px)}56%{transform:translate(271.0px,267.5px)}92%{transform:translate(151.0px,207.5px)}100%{transform:translate(151.0px,207.5px)}}
+
+.iso-legend {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em;
+  color: var(--muted); margin-top: 10px;
+}
+.ramp { display: flex; gap: 2px; }
+.ramp i { width: 20px; height: 7px; }
+.ramp i:nth-child(1) { background: var(--h1) } .ramp i:nth-child(2) { background: var(--h2) }
+.ramp i:nth-child(3) { background: var(--h3) } .ramp i:nth-child(4) { background: var(--h4) }
+.ramp i:nth-child(5) { background: var(--h5) }
+.iso-legend .down { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.iso-legend .down b { width: 7px; height: 7px; border-radius: 50%; background: var(--alarm); }
+
+/* --- grafikler --- */
+.chart { width: 100%; height: auto; display: block; overflow: visible; }
+.chart .grid { stroke: var(--line-soft); stroke-width: 1; }
+.chart .axis { stroke: var(--line); stroke-width: 1; }
+.chart .tick { font-family: var(--mono); font-size: 9.5px; fill: var(--muted); }
+.chart .bar { fill: var(--mark); }
+.chart .bar.peak { fill: var(--mark-peak); }
+.chart .bar:hover { fill: var(--ink); }
+.chart .peak-val { font-family: var(--mono); font-size: 11px; font-weight: 500; fill: var(--ink); }
+.zones .zlabel { font-family: var(--sans); font-size: 12.5px; fill: var(--ink-2); }
+.zones .ztrack { fill: var(--line-soft); }
+.zones .zbar { fill: var(--mark); }
+.zones .zbar.top { fill: var(--mark); }
+.zones .zbar:hover { fill: var(--ink); }
+.zones .zval { font-family: var(--mono); font-size: 11.5px; fill: var(--muted); }
+
+.chart-grid { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); margin-top: 36px; }
+@media (min-width: 900px) { .chart-grid { grid-template-columns: 1fr 1fr; } }
+.chart-box { background: var(--surface); padding: 20px 18px; min-width: 0; }
+.chart-box h3 { font-size: 16.5px; margin-bottom: 4px; }
+.chart-box p { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+.chart-note { color: var(--muted); font-size: 12px; margin-top: 12px; }
+
+/* --- hareket zinciri --- */
+.chain-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.chain-svg .lane { stroke: var(--line-soft); stroke-width: 1; stroke-dasharray: 3 4; }
+.chain-svg .lane-tag { font-family: var(--mono); font-size: 9.5px; fill: var(--muted); letter-spacing: .1em; }
+.chain-svg .chain-path { fill: none; stroke: var(--accent); stroke-width: 2; }
+.chain-svg .chain-node { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
+.chain-svg .chain-time { font-family: var(--mono); font-size: 11.5px; fill: var(--ink); font-weight: 500; }
+.chain-svg .chain-room { font-family: var(--sans); font-size: 12px; fill: var(--ink-2); }
+.chain-svg .chain-tracer { fill: var(--mark-peak); }
+@media (prefers-reduced-motion: no-preference) {
+  .chain-svg .chain-tracer { animation: chaintrace 7s linear infinite; }
+}
+@media (prefers-reduced-motion: reduce) { .chain-svg .chain-tracer { display: none; } }
+@keyframes chaintrace{0%{transform:translate(54.0px,92px)}30%{transform:translate(224.7px,92px)}58%{transform:translate(395.3px,44px)}88%{transform:translate(566.0px,92px)}100%{transform:translate(566.0px,92px)}}
+
+/* --- kayıt karesi --- */
+.cctv { width: 100%; height: auto; display: block; }
+@media (prefers-reduced-motion: no-preference) {
+  .rec-dot { animation: recblink 1.8s steps(1, end) infinite; }
+}
+@keyframes recblink { 50% { opacity: .15 } }
+.clip-shell { background: var(--surface); border: 1px solid var(--line); min-width: 0; }
+.clip-bar {
+  display: flex; align-items: center; gap: 10px; padding: 12px 15px;
+  border-bottom: 1px solid var(--line);
+}
+.clip-bar .t { font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.clip-bar .lvl {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em;
+  color: var(--alarm); border: 1px solid var(--alarm); padding: 2px 7px;
+}
+.clip-bar .src { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+.clip-txt { padding: 14px 15px; font-size: 14.5px; color: var(--ink-2); }
+.clip-acts { display: flex; flex-wrap: wrap; gap: 7px; padding: 0 15px 15px; }
+.clip-acts span {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; color: var(--muted);
+  border: 1px solid var(--line); padding: 5px 9px;
+}
+.clip-acts span:first-child { color: var(--accent); border-color: var(--accent); }
+
+/* ===================== animasyon katmanı =====================
+   Dinlenme hali her zaman son hal. .reveal yalnızca görünür olduğunda
+   bir kez oynar; JS çalışmazsa hiçbir şey eksik görünmez. */
+@media (prefers-reduced-motion: no-preference) {
+
+  /* hero açılış sıralaması */
+  .hero-copy > * { animation: rise .62s cubic-bezier(.2,.7,.3,1) both; }
+  .hero-copy > :nth-child(1) { animation-delay: .02s }
+  .hero-copy > :nth-child(2) { animation-delay: .10s }
+  .hero-copy > :nth-child(3) { animation-delay: .18s }
+  .hero-copy > :nth-child(4) { animation-delay: .26s }
+  .hero-copy > :nth-child(5) { animation-delay: .34s }
+  .iso-wrap { animation: isoin .9s cubic-bezier(.2,.7,.3,1) both; }
+
+  /* bölüm başlıkları: ince bir yükselme, görünürken */
+  .reveal.in > .kicker { animation: rise .5s ease-out both }
+  .reveal.in > h2, .reveal.in > div > h2 { animation: rise .55s ease-out .05s both }
+
+  /* grafikler: barlar tabandan büyür */
+  .chart.in .bar { animation: grow .7s cubic-bezier(.2,.8,.3,1) both; transform-origin: center bottom }
+  .zones.in .zbar { animation: wipe .7s cubic-bezier(.2,.8,.3,1) both; transform-origin: left center }
+  .chart.in .peak-val { animation: rise .5s ease-out .55s both }
+
+  /* zincir hattı çizilir */
+  .chain-svg.in .chain-path { animation: draw 1.3s ease-out both }
+  .chain-svg.in .chain-node { animation: pop .4s cubic-bezier(.3,1.5,.5,1) both }
+  .chain-svg.in .chain-node:nth-of-type(1) { animation-delay: .15s }
+  .chain-svg.in .chain-node:nth-of-type(2) { animation-delay: .45s }
+  .chain-svg.in .chain-node:nth-of-type(3) { animation-delay: .75s }
+  .chain-svg.in .chain-node:nth-of-type(4) { animation-delay: 1.05s }
+
+  /* en yoğun oda hafifçe nefes alır */
+  .iso .room.h5 { animation: heatin .8s ease-out var(--d,0s) both, breathe 3.4s ease-in-out 1.4s infinite }
+
+  /* tarama çizgisi ve ilerleme çubuğu */
+  .cctv .scan { animation: scan 5.5s linear infinite }
+  .cctv .prog { animation: prog 15s linear infinite }
+
+  /* adım ve hücre ızgaraları: sırayla */
+  .steps.in .step { animation: rise .5s ease-out both }
+  .steps.in .step:nth-child(2) { animation-delay: .07s }
+  .steps.in .step:nth-child(3) { animation-delay: .14s }
+  .steps.in .step:nth-child(4) { animation-delay: .21s }
+  .grid3.in .cell { animation: rise .45s ease-out both }
+  .grid3.in .cell:nth-child(2) { animation-delay: .05s }
+  .grid3.in .cell:nth-child(3) { animation-delay: .10s }
+  .grid3.in .cell:nth-child(4) { animation-delay: .15s }
+  .grid3.in .cell:nth-child(5) { animation-delay: .20s }
+  .grid3.in .cell:nth-child(6) { animation-delay: .25s }
+}
+
+@keyframes rise { from { transform: translateY(12px) } to { transform: none } }
+@keyframes isoin { from { transform: translateY(18px) scale(.985) } to { transform: none } }
+@keyframes grow { from { transform: scaleY(.04) } to { transform: none } }
+@keyframes wipe { from { transform: scaleX(.02) } to { transform: none } }
+@keyframes draw { from { stroke-dasharray: 0 900 } to { stroke-dasharray: 900 0 } }
+@keyframes pop { from { r: 0 } to { r: 5 } }
+@keyframes breathe { 0%,100% { opacity: 1 } 50% { opacity: .72 } }
+@keyframes scan { 0% { transform: translateY(-18px); opacity: 0 }
+                  12% { opacity: .5 } 88% { opacity: .5 }
+                  100% { transform: translateY(315px); opacity: 0 } }
+@keyframes prog { from { width: 0 } to { width: 560px } }
+
+/* hover mikro etkileşimleri — yalnızca etkileşimli öğelerde */
+.btn { transition: background .16s ease, transform .16s ease; }
+.btn:active { transform: translateY(1px); }
+.plan { transition: border-color .2s ease, transform .2s ease; }
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .plan:hover { transform: translateY(-3px); border-color: var(--accent); }
+}
+tbody tr { transition: background .14s ease; }
+tbody tr:hover { background: var(--surface-2); }
+.bar, .zbar { transition: fill .14s ease; }
+.faq summary { transition: color .14s ease; }
+.faq summary:hover { color: var(--accent); }
+</style>
+
+<header class="bar">
+  <div class="wrap bar-in">
+    <span class="logo">KESTRI<b>O</b>N</span>
+    <nav>
+      <a href="#cozum">Çözüm</a>
+      <a href="#grup">Çok tesis</a>
+      <a href="#raporlama">Raporlama</a>
+      <a href="#kurulum">Kurulum</a>
+      <a href="#guvenlik">Veri güvenliği</a>
+      <a href="#paketler">Paketler</a>
+      <a href="#ortaklik">Ortaklık</a>
+    </nav>
+    <a class="btn sm" href="panel.html">15 gün ücretsiz</a>
+  </div>
+</header>
+
+<!-- ================= HERO ================= -->
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <span class="eyebrow">ÇOK TESİSLİ İŞLETMELER İÇİN</span>
+      <h1>Yüzlerce kamera.<br>Her sabah tek rapor.</h1>
+      <p class="lead">
+        Mevcut kamera altyapınızı olduğu gibi kullanır, tüm görüntüyü sürekli
+        analiz eder, operasyonun durumunu tek rapora indirir.
+      </p>
+      <div class="cta-row">
+        <a class="btn" href="#basla">15 gün ücretsiz başlayın</a>
+        <a class="btn ghost" href="#raporlama">Örnek raporu inceleyin</a>
+      </div>
+      <p class="note">
+        Kart ve randevu gerekmez. Bağladığınız gün izleme başlar, ilk rapor ertesi sabah.
+      </p>
+    </div>
+
+    <!-- izometrik tesis: odalar son bir saatteki yoğunlukla renklenir -->
+    <div class="iso-wrap">
+<svg class="iso" viewBox="0 0 392 430" role="img" aria-label="Üç katlı tesisin izometrik görünümü; odalar son bir saatteki hareket yoğunluğuna göre renklenir, kapalı kamera kırmızı işaretlidir.">
+<polygon class="shaft" points="286.0,337.0 316.0,352.0 256.0,382.0 226.0,367.0" transform="translate(0,-184)"/>
+<polygon class="shaft-side" points="226.0,367.0 256.0,382.0 256.0,198.0 226.0,183.0"/>
+<g class="floor" data-floor="0">
+<polygon class="slab-l" points="76.0,292.0 256.0,382.0 256.0,389.0 76.0,299.0"/>
+<polygon class="slab-r" points="256.0,382.0 376.0,322.0 376.0,329.0 256.0,389.0"/>
+<polygon class="slab" points="196.0,232.0 376.0,322.0 256.0,382.0 76.0,292.0"/>
+<polygon class="room h5" points="196.0,232.0 256.0,262.0 196.0,292.0 136.0,262.0" style="--d:0.00s"><title>Giriş Holü — yoğunluk %85</title></polygon>
+<polygon class="room-line" points="196.0,232.0 256.0,262.0 196.0,292.0 136.0,262.0"/>
+<g class="cam"><circle cx="229.0" cy="249.0" r="2.8"/><line x1="229.0" y1="252.0" x2="229.0" y2="262.0"/></g>
+<polygon class="room h5" points="256.0,262.0 316.0,292.0 256.0,322.0 196.0,292.0" style="--d:0.09s"><title>Sevkiyat — yoğunluk %95</title></polygon>
+<polygon class="room-line" points="256.0,262.0 316.0,292.0 256.0,322.0 196.0,292.0"/>
+<g class="cam"><circle cx="289.0" cy="279.0" r="2.8"/><line x1="289.0" y1="282.0" x2="289.0" y2="292.0"/></g>
+<polygon class="room off" points="316.0,292.0 376.0,322.0 316.0,352.0 256.0,322.0" style="--d:0.18s"><title>Yükleme Rampası — kamera kapalı</title></polygon>
+<polygon class="room-line" points="316.0,292.0 376.0,322.0 316.0,352.0 256.0,322.0"/>
+<g class="cam-down"><circle cx="349.0" cy="309.0" r="3.4"/><line x1="349.0" y1="312.0" x2="349.0" y2="322.0" stroke-dasharray="2 2"/><circle class="ping" cx="349.0" cy="322.0" r="7"/></g>
+<polygon class="room h3" points="136.0,262.0 226.0,307.0 166.0,337.0 76.0,292.0" style="--d:0.27s"><title>Raf A — yoğunluk %55</title></polygon>
+<polygon class="room-line" points="136.0,262.0 226.0,307.0 166.0,337.0 76.0,292.0"/>
+<g class="cam"><circle cx="199.0" cy="294.0" r="2.8"/><line x1="199.0" y1="297.0" x2="199.0" y2="307.0"/></g>
+<polygon class="room h3" points="226.0,307.0 286.0,337.0 226.0,367.0 166.0,337.0" style="--d:0.36s"><title>Raf B — yoğunluk %42</title></polygon>
+<polygon class="room-line" points="226.0,307.0 286.0,337.0 226.0,367.0 166.0,337.0"/>
+<g class="cam"><circle cx="259.0" cy="324.0" r="2.8"/><line x1="259.0" y1="327.0" x2="259.0" y2="337.0"/></g>
+<polygon class="room h4" points="286.0,337.0 316.0,352.0 256.0,382.0 226.0,367.0" style="--d:0.45s"><title>Merdiven — yoğunluk %60</title></polygon>
+<polygon class="room-line" points="286.0,337.0 316.0,352.0 256.0,382.0 226.0,367.0"/>
+<g class="peak-label"><line x1="256.0" y1="292.0" x2="300.0" y2="262.0"/><text x="304.0" y="260.0">Sevkiyat</text><text class="sub" x="304.0" y="272.0">en yoğun bölge</text></g>
+<g class="floor-tag"><text x="60.0" y="286.0">Z</text><text class="sub" x="60.0" y="298.0">ZEMIN</text></g>
+</g>
+<g class="floor" data-floor="1">
+<polygon class="slab-l" points="76.0,200.0 256.0,290.0 256.0,297.0 76.0,207.0"/>
+<polygon class="slab-r" points="256.0,290.0 376.0,230.0 376.0,237.0 256.0,297.0"/>
+<polygon class="slab" points="196.0,140.0 376.0,230.0 256.0,290.0 76.0,200.0"/>
+<polygon class="room h3" points="196.0,140.0 286.0,185.0 226.0,215.0 136.0,170.0" style="--d:0.54s"><title>Raf C — yoğunluk %50</title></polygon>
+<polygon class="room-line" points="196.0,140.0 286.0,185.0 226.0,215.0 136.0,170.0"/>
+<g class="cam"><circle cx="259.0" cy="172.0" r="2.8"/><line x1="259.0" y1="175.0" x2="259.0" y2="185.0"/></g>
+<polygon class="room h2" points="286.0,185.0 376.0,230.0 316.0,260.0 226.0,215.0" style="--d:0.63s"><title>Soğuk Oda — yoğunluk %28</title></polygon>
+<polygon class="room-line" points="286.0,185.0 376.0,230.0 316.0,260.0 226.0,215.0"/>
+<g class="cam"><circle cx="349.0" cy="217.0" r="2.8"/><line x1="349.0" y1="220.0" x2="349.0" y2="230.0"/></g>
+<polygon class="room h5" points="136.0,170.0 226.0,215.0 166.0,245.0 76.0,200.0" style="--d:0.72s"><title>Paketleme — yoğunluk %88</title></polygon>
+<polygon class="room-line" points="136.0,170.0 226.0,215.0 166.0,245.0 76.0,200.0"/>
+<g class="cam"><circle cx="199.0" cy="202.0" r="2.8"/><line x1="199.0" y1="205.0" x2="199.0" y2="215.0"/></g>
+<polygon class="room h2" points="226.0,215.0 286.0,245.0 226.0,275.0 166.0,245.0" style="--d:0.81s"><title>Kalite Kontrol — yoğunluk %35</title></polygon>
+<polygon class="room-line" points="226.0,215.0 286.0,245.0 226.0,275.0 166.0,245.0"/>
+<g class="cam"><circle cx="259.0" cy="232.0" r="2.8"/><line x1="259.0" y1="235.0" x2="259.0" y2="245.0"/></g>
+<polygon class="room h3" points="286.0,245.0 316.0,260.0 256.0,290.0 226.0,275.0" style="--d:0.90s"><title>Merdiven — yoğunluk %57</title></polygon>
+<polygon class="room-line" points="286.0,245.0 316.0,260.0 256.0,290.0 226.0,275.0"/>
+<g class="floor-tag"><text x="60.0" y="194.0">1</text><text class="sub" x="60.0" y="206.0">1. KAT</text></g>
+</g>
+<g class="floor" data-floor="2">
+<polygon class="slab-l" points="76.0,108.0 256.0,198.0 256.0,205.0 76.0,115.0"/>
+<polygon class="slab-r" points="256.0,198.0 376.0,138.0 376.0,145.0 256.0,205.0"/>
+<polygon class="slab" points="196.0,48.0 376.0,138.0 256.0,198.0 76.0,108.0"/>
+<polygon class="room h3" points="196.0,48.0 286.0,93.0 226.0,123.0 136.0,78.0" style="--d:1.08s"><title>Ofis — yoğunluk %40</title></polygon>
+<polygon class="room-line" points="196.0,48.0 286.0,93.0 226.0,123.0 136.0,78.0"/>
+<g class="cam"><circle cx="259.0" cy="80.0" r="2.8"/><line x1="259.0" y1="83.0" x2="259.0" y2="93.0"/></g>
+<polygon class="room h1" points="286.0,93.0 376.0,138.0 316.0,168.0 226.0,123.0" style="--d:1.17s"><title>Arşiv — yoğunluk %18</title></polygon>
+<polygon class="room-line" points="286.0,93.0 376.0,138.0 316.0,168.0 226.0,123.0"/>
+<g class="cam"><circle cx="349.0" cy="125.0" r="2.8"/><line x1="349.0" y1="128.0" x2="349.0" y2="138.0"/></g>
+<polygon class="room h2" points="136.0,78.0 196.0,108.0 136.0,138.0 76.0,108.0" style="--d:1.26s"><title>Toplantı — yoğunluk %22</title></polygon>
+<polygon class="room-line" points="136.0,78.0 196.0,108.0 136.0,138.0 76.0,108.0"/>
+<g class="cam"><circle cx="169.0" cy="95.0" r="2.8"/><line x1="169.0" y1="98.0" x2="169.0" y2="108.0"/></g>
+<polygon class="room h2" points="196.0,108.0 286.0,153.0 226.0,183.0 136.0,138.0" style="--d:1.35s"><title>Malzeme — yoğunluk %30</title></polygon>
+<polygon class="room-line" points="196.0,108.0 286.0,153.0 226.0,183.0 136.0,138.0"/>
+<g class="cam"><circle cx="259.0" cy="140.0" r="2.8"/><line x1="259.0" y1="143.0" x2="259.0" y2="153.0"/></g>
+<polygon class="room h3" points="286.0,153.0 316.0,168.0 256.0,198.0 226.0,183.0" style="--d:1.44s"><title>Merdiven — yoğunluk %45</title></polygon>
+<polygon class="room-line" points="286.0,153.0 316.0,168.0 256.0,198.0 226.0,183.0"/>
+<g class="floor-tag"><text x="60.0" y="102.0">2</text><text class="sub" x="60.0" y="114.0">2. KAT</text></g>
+</g>
+<polyline class="route" points="196.0,262.0 271.0,359.5 271.0,267.5 151.0,207.5"/>
+<circle class="route-node" cx="196.0" cy="262.0" r="3"/>
+<circle class="route-node" cx="271.0" cy="359.5" r="3"/>
+<circle class="route-node" cx="271.0" cy="267.5" r="3"/>
+<circle class="route-node" cx="151.0" cy="207.5" r="3"/>
+<circle class="tracer" r="5.5" cx="0" cy="0"/>
+</svg>
+      <div class="iso-legend">
+        <span>SAKİN</span>
+        <span class="ramp"><i></i><i></i><i></i><i></i><i></i></span>
+        <span>YOĞUN</span>
+        <span class="down"><b></b>KAMERA KAPALI</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= SORUN ================= -->
+<section class="band" style="padding-block:44px">
+  <div class="wrap">
+    <div class="metrics">
+      <div class="metric">
+        <b class="count" data-to="384">384 saat</b>
+        <span>16 kameralı bir tesisin tek günde ürettiği görüntü.</span>
+      </div>
+      <div class="metric">
+        <b>Olaydan sonra</b>
+        <span>Kayıtlara ancak bir şey kaybolduğunda bakılıyor.</span>
+      </div>
+      <div class="metric">
+        <b>Kayda geçmeyen ihlal</b>
+        <span>İSG denetimi olayın kendisine değil, sonucuna bakıyor.</span>
+      </div>
+      <div class="metric">
+        <b>Sessiz arıza</b>
+        <span>Kapalı kamera, olay yaşanana kadar sorun sayılmıyor.</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= ÇOK TESİSLİ YÖNETİM ================= -->
+<section id="grup">
+  <div class="wrap reveal">
+    <div class="head-row">
+      <div>
+        <p class="kicker">ÇOK TESİSLİ YÖNETİM</p>
+        <h2>Bütün tesisler tek ekranda</h2>
+      </div>
+      <p class="lead">Kamera durumu, olay sayısı ve veri eksikleri yan yana.</p>
+    </div>
+    <div class="split">
+    <div class="panel" role="img" aria-label="Grup görünümü: üç tesisin kamera durumu ve günlük olay dağılımı">
+      <div class="panel-head">
+        <span>GRUP GÖRÜNÜMÜ</span>
+        <span>·</span>
+        <b>3 TESİS · 74 KAMERA</b>
+      </div>
+
+      <div class="site-row">
+        <div class="site-name"><span class="dot"></span>Gebze Lojistik Merkezi</div>
+        <div class="site-stat num"><span class="count" data-to="38">38</span> / 38 <span class="quiet">kamera</span></div>
+        <div class="site-meta">SON 24 SAAT · <span class="count" data-to="1284" data-sep="1">1.284</span> OLAY</div>
+        <div class="site-stat num quiet">uyarı yok</div>
+      </div>
+
+      <div class="site-row">
+        <div class="site-name"><span class="dot warn"></span>Çerkezköy Üretim</div>
+        <div class="site-stat num">24 / 24 <span class="quiet">kamera</span></div>
+        <div class="site-meta">SON 24 SAAT · <span class="count" data-to="906">906</span> OLAY</div>
+        <div class="site-stat num"><em>3 uyarı</em></div>
+      </div>
+
+      <div class="site-row">
+        <div class="site-name"><span class="dot bad"></span>Adana Depo</div>
+        <div class="site-stat num">11 / 12 <span class="quiet">kamera</span></div>
+        <div class="site-meta">RAMPA KAMERASI 20:04'TEN BERİ KAPALI</div>
+        <div class="site-stat num"><em>veri eksik</em></div>
+
+        <div class="spark" aria-hidden="true">
+          <i style="height:14%"></i><i style="height:9%"></i><i style="height:7%"></i><i style="height:6%"></i>
+          <i style="height:11%"></i><i style="height:26%"></i><i style="height:58%"></i><i style="height:74%"></i>
+          <i style="height:91%" class="peak"></i><i style="height:80%"></i><i style="height:62%"></i><i style="height:44%"></i>
+          <i style="height:38%"></i><i style="height:51%"></i><i style="height:66%"></i><i style="height:78%"></i>
+          <i style="height:69%"></i><i style="height:47%"></i><i style="height:22%"></i><i style="height:13%"></i>
+          <i style="height:8%"></i><i style="height:6%"></i><i style="height:5%"></i><i style="height:9%"></i>
+        </div>
+      </div>
+
+      <div class="panel-foot">
+        <span>GÜNLÜK RAPOR · HER GÜN 18:00</span>
+        <span>SON GÜNCELLEME 4 SN ÖNCE</span>
+      </div>
+    </div>
+      <div class="points">
+        <div class="point">
+          <h3>Kamera arızası anında görünür</h3>
+          <p>Her tesis için kaç kameranın ayakta olduğu tek satırda yazar.</p>
+        </div>
+        <div class="point">
+          <h3>Tesisler kıyaslanabilir</h3>
+          <p>Aynı ölçütlerle üretilen raporlar, farkı aylık toplantıdan önce gösterir.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= ÇÖZÜM ================= -->
+<section id="cozum" class="band">
+  <div class="wrap reveal">
+    <div class="head-row">
+      <div>
+        <p class="kicker">ÇALIŞMA DÜZENİ</p>
+        <h2>Mevcut altyapının üzerine kurulur</h2>
+      </div>
+      <p class="lead">Kamera değişimi veya yeni kayıt cihazı gerekmez.</p>
+    </div>
+
+    <ol class="steps" style="list-style:none;margin-left:0;padding-left:0">
+      <li class="step">
+        <div class="step-n">01 · ENTEGRASYON</div>
+        <h3>Kamera sistemi bağlanır</h3>
+        <p>RTSP veren IP kamera ve kayıt cihazlarıyla çalışır. Kurulumu kendiniz yapabilir ya da bize bırakabilirsiniz.</p>
+      </li>
+      <li class="step">
+        <div class="step-n">02 · SAHA PROFİLİ</div>
+        <h3>Tesis tanımlanır</h3>
+        <p>Faaliyet türü, vardiya saatleri ve zorunlu ekipman tanımlanır.</p>
+      </li>
+      <li class="step">
+        <div class="step-n">03 · İZLEME</div>
+        <h3>Tüm kameralar eşzamanlı</h3>
+        <p>Analiz kesintisiz çalışır. Uyarıda kayıtla birlikte bildirim gider.</p>
+      </li>
+      <li class="step">
+        <div class="step-n">04 · RAPORLAMA</div>
+        <h3>Yönetime rapor akar</h3>
+        <p>Tanımladığınız saatte ve konuda; tesis ve grup bazında.</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ================= RAPORLAMA ================= -->
+<section id="raporlama">
+  <div class="wrap reveal">
+    <div class="head-row">
+      <div>
+        <p class="kicker">RAPORLAMA</p>
+        <h2>Olay listesi değil, yönetim özeti</h2>
+      </div>
+      <p class="lead">
+        Konuyu siz belirlersiniz: vardiya giriş-çıkış, iş güvenliği, sevkiyat ve
+        bölge doluluğu hazır şablon gelir.
+      </p>
+    </div>
+
+    <div class="split">
+      <article class="doc">
+        <div class="doc-title">Gün Sonu Operasyon Raporu</div>
+        <div class="doc-stamp">ÇERKEZKÖY ÜRETİM · 2 EKİM 2026 18:00 · SON 24 SAAT · 19 KAMERA</div>
+
+        <h4>ÖZET</h4>
+        <p>
+          412 olay kaydedildi. Yoğunluk 09:00–11:00 ve 16:00–18:00 aralıklarında
+          toplandı; en yoğun saat 10:00 (68 olay). Üç olay uyarı seviyesinde, kritik olay yok.
+        </p>
+
+        <h4>ÖNE ÇIKAN OLAYLAR</h4>
+        <ul>
+          <li>18:42–18:51 — Girişten Raf Bloğu C'ye giden ve elinde kutuyla dönen bir hareket zinciri. Dört kamerada görüldü, tek olay olarak birleştirildi. Stok kaydıyla karşılaştırılması öneriliyor.</li>
+          <li>17:20 — Yükleme rampasında koruyucu ekipmansız çalışan tespit edildi.</li>
+          <li>11:34 — Ana koridorda forklift ile yaya aynı anda dar alanda bulundu.</li>
+        </ul>
+
+        <h4>VERİ BÜTÜNLÜĞÜ</h4>
+        <p class="flag">
+          Yükleme Rampası kamerası <b>20:04'ten rapor saatine kadar kapalıydı.</b>
+          Bu aralıkta o bölge için veri bulunmuyor; olay yaşanmadığı anlamına gelmez.
+        </p>
+
+        <h4>ÖNERİLER</h4>
+        <ul>
+          <li>18:42–18:51 aralığındaki kaydın stok sayımıyla incelenmesi.</li>
+          <li>Rampa kamerasının bağlantısının kontrol edilmesi.</li>
+        </ul>
+
+        <div class="doc-foot">KESTRION · GÖREV: GÜN SONU OPERASYON RAPORU · ALICI: TESİS MÜDÜRÜ, İSG SORUMLUSU</div>
+      </article>
+
+      <div class="points">
+        <div class="point">
+          <h3>Kameralar birlikte değerlendirilir</h3>
+          <p>Kameralar arası geçişler birleştirilir: dört kayıt satırı yerine tek olay.</p>
+        </div>
+        <div class="point">
+          <h3>Kör kalınan süre raporda yazar</h3>
+          <p>Sistem "olay yok" demez, "veri yok" der. Denetim ve sigortada bu ayrım belirleyici.</p>
+        </div>
+        <div class="point">
+          <h3>Kişi bazlı ölçüm yapılmaz</h3>
+          <p>Raporlar bölge ve saat bazında. Tek tek çalışan takibi kapsam dışı.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-grid">
+      <div class="chart-box">
+        <h3>Saatlik olay dağılımı</h3>
+        <p>Çerkezköy Üretim · 2 Ekim · toplam 412 olay</p>
+<svg class="chart" viewBox="0 0 600 190" role="img" aria-label="Saatlik olay dağılımı. Toplam 412 olay, en yoğun saat 10:00 ile 68 olay.">
+<line class="grid" x1="30" y1="164.0" x2="592" y2="164.0"/>
+<text class="tick" x="23" y="167.5" text-anchor="end">0</text>
+<line class="grid" x1="30" y1="127.0" x2="592" y2="127.0"/>
+<text class="tick" x="23" y="130.5" text-anchor="end">20</text>
+<line class="grid" x1="30" y1="90.0" x2="592" y2="90.0"/>
+<text class="tick" x="23" y="93.5" text-anchor="end">40</text>
+<line class="grid" x1="30" y1="53.0" x2="592" y2="53.0"/>
+<text class="tick" x="23" y="56.5" text-anchor="end">60</text>
+<line class="grid" x1="30" y1="16.0" x2="592" y2="16.0"/>
+<text class="tick" x="23" y="19.5" text-anchor="end">80</text>
+<rect class="bar" x="30.0" y="158.4" width="21.5" height="5.5" rx="2.8"><title>00:00 — 3 olay</title></rect>
+<rect class="bar" x="53.5" y="160.3" width="21.5" height="3.7" rx="1.9"><title>01:00 — 2 olay</title></rect>
+<rect class="bar" x="77.0" y="160.3" width="21.5" height="3.7" rx="1.9"><title>02:00 — 2 olay</title></rect>
+<rect class="bar" x="100.5" y="162.2" width="21.5" height="1.9" rx="0.9"><title>03:00 — 1 olay</title></rect>
+<rect class="bar" x="124.0" y="160.3" width="21.5" height="3.7" rx="1.9"><title>04:00 — 2 olay</title></rect>
+<rect class="bar" x="147.5" y="156.6" width="21.5" height="7.4" rx="3.0"><title>05:00 — 4 olay</title></rect>
+<rect class="bar" x="171.0" y="147.3" width="21.5" height="16.7" rx="3.0"><title>06:00 — 9 olay</title></rect>
+<rect class="bar" x="194.5" y="138.1" width="21.5" height="25.9" rx="3.0"><title>07:00 — 14 olay</title></rect>
+<rect class="bar" x="218.0" y="119.6" width="21.5" height="44.4" rx="3.0"><title>08:00 — 24 olay</title></rect>
+<rect class="bar" x="241.5" y="86.3" width="21.5" height="77.7" rx="3.0"><title>09:00 — 42 olay</title></rect>
+<rect class="bar peak" x="265.0" y="38.2" width="21.5" height="125.8" rx="3.0"><title>10:00 — 68 olay</title></rect>
+<rect class="bar" x="288.5" y="88.2" width="21.5" height="75.8" rx="3.0"><title>11:00 — 41 olay</title></rect>
+<rect class="bar" x="312.0" y="138.1" width="21.5" height="25.9" rx="3.0"><title>12:00 — 14 olay</title></rect>
+<rect class="bar" x="335.5" y="130.7" width="21.5" height="33.3" rx="3.0"><title>13:00 — 18 olay</title></rect>
+<rect class="bar" x="359.0" y="112.2" width="21.5" height="51.8" rx="3.0"><title>14:00 — 28 olay</title></rect>
+<rect class="bar" x="382.5" y="108.5" width="21.5" height="55.5" rx="3.0"><title>15:00 — 30 olay</title></rect>
+<rect class="bar" x="406.0" y="101.1" width="21.5" height="62.9" rx="3.0"><title>16:00 — 34 olay</title></rect>
+<rect class="bar" x="429.5" y="93.7" width="21.5" height="70.3" rx="3.0"><title>17:00 — 38 olay</title></rect>
+<rect class="bar" x="453.0" y="130.7" width="21.5" height="33.3" rx="3.0"><title>18:00 — 18 olay</title></rect>
+<rect class="bar" x="476.5" y="145.5" width="21.5" height="18.5" rx="3.0"><title>19:00 — 10 olay</title></rect>
+<rect class="bar" x="500.0" y="154.8" width="21.5" height="9.2" rx="3.0"><title>20:00 — 5 olay</title></rect>
+<rect class="bar" x="523.5" y="158.4" width="21.5" height="5.5" rx="2.8"><title>21:00 — 3 olay</title></rect>
+<rect class="bar" x="547.0" y="160.3" width="21.5" height="3.7" rx="1.9"><title>22:00 — 2 olay</title></rect>
+<rect class="bar" x="570.5" y="162.5" width="21.5" height="1.5" rx="0.8"><title>23:00 — 0 olay</title></rect>
+<text class="peak-val" x="275.8" y="31.2" text-anchor="middle">68</text>
+<text class="tick" x="40.8" y="181" text-anchor="middle">00</text>
+<text class="tick" x="111.2" y="181" text-anchor="middle">03</text>
+<text class="tick" x="181.8" y="181" text-anchor="middle">06</text>
+<text class="tick" x="252.2" y="181" text-anchor="middle">09</text>
+<text class="tick" x="322.8" y="181" text-anchor="middle">12</text>
+<text class="tick" x="393.2" y="181" text-anchor="middle">15</text>
+<text class="tick" x="463.8" y="181" text-anchor="middle">18</text>
+<text class="tick" x="534.2" y="181" text-anchor="middle">21</text>
+<line class="axis" x1="30" y1="164.0" x2="592" y2="164.0"/>
+</svg>
+        <p class="chart-note">Vardiya değişimi ve sevkiyat saatleri grafikte ayrışır.</p>
+      </div>
+      <div class="chart-box">
+        <h3>Bölge bazında yoğunluk</h3>
+        <p>Aynı gün · olay sayısı</p>
+<svg class="chart zones" viewBox="0 0 600 218" role="img" aria-label="Bölge bazında olay sayısı; en yoğun bölge Sevkiyat 118 olay.">
+<text class="zlabel" x="122" y="17.0" text-anchor="end">Sevkiyat</text>
+<rect class="ztrack" x="132" y="5" width="424" height="16" rx="2"/>
+<rect class="zbar top" x="132" y="5" width="424.0" height="16" rx="3"><title>Sevkiyat — 118 olay</title></rect>
+<text class="zval" x="564.0" y="17.0">118</text>
+<text class="zlabel" x="122" y="49.0" text-anchor="end">Giriş Holü</text>
+<rect class="ztrack" x="132" y="37" width="424" height="16" rx="2"/>
+<rect class="zbar" x="132" y="37" width="309.0" height="16" rx="3"><title>Giriş Holü — 86 olay</title></rect>
+<text class="zval" x="449.0" y="49.0">86</text>
+<text class="zlabel" x="122" y="81.0" text-anchor="end">Paketleme</text>
+<rect class="ztrack" x="132" y="69" width="424" height="16" rx="2"/>
+<rect class="zbar" x="132" y="69" width="265.9" height="16" rx="3"><title>Paketleme — 74 olay</title></rect>
+<text class="zval" x="405.9" y="81.0">74</text>
+<text class="zlabel" x="122" y="113.0" text-anchor="end">Raf A</text>
+<rect class="ztrack" x="132" y="101" width="424" height="16" rx="2"/>
+<rect class="zbar" x="132" y="101" width="186.8" height="16" rx="3"><title>Raf A — 52 olay</title></rect>
+<text class="zval" x="326.8" y="113.0">52</text>
+<text class="zlabel" x="122" y="145.0" text-anchor="end">Raf B</text>
+<rect class="ztrack" x="132" y="133" width="424" height="16" rx="2"/>
+<rect class="zbar" x="132" y="133" width="147.3" height="16" rx="3"><title>Raf B — 41 olay</title></rect>
+<text class="zval" x="287.3" y="145.0">41</text>
+<text class="zlabel" x="122" y="177.0" text-anchor="end">Soğuk Oda</text>
+<rect class="ztrack" x="132" y="165" width="424" height="16" rx="2"/>
+<rect class="zbar" x="132" y="165" width="93.4" height="16" rx="3"><title>Soğuk Oda — 26 olay</title></rect>
+<text class="zval" x="233.4" y="177.0">26</text>
+<text class="zlabel" x="122" y="209.0" text-anchor="end">Yükleme Rampası</text>
+<rect class="ztrack" x="132" y="197" width="424" height="16" rx="2"/>
+<rect class="zbar" x="132" y="197" width="53.9" height="16" rx="3"><title>Yükleme Rampası — 15 olay</title></rect>
+<text class="zval" x="193.9" y="209.0">15</text>
+</svg>
+        <p class="chart-note">Yükleme rampası, kamera kapalı olduğu için düşük görünüyor.</p>
+      </div>
+    </div>
+
+    <div class="chart-grid" style="grid-template-columns:1fr">
+      <div class="chart-box">
+        <h3>Dört kamerada görülen tek hareket</h3>
+        <p>18:42 – 18:51 · iki kat · 9 dakika</p>
+<svg class="chain-svg" viewBox="0 0 620 136" role="img" aria-label="Dört kamerada görülen tek hareket: 18:42 Giriş Holü, 18:43 Merdiven, 18:45 birinci kat Raf Bloğu C, 18:51 Giriş Holü.">
+<line class="lane" x1="22" y1="92" x2="610" y2="92"/>
+<text class="lane-tag" x="22" y="82">ZEMİN</text>
+<line class="lane" x1="22" y1="44" x2="610" y2="44"/>
+<text class="lane-tag" x="22" y="34">1. KAT</text>
+<polyline class="chain-path" points="54.0,92.0 224.7,92.0 395.3,44.0 566.0,92.0"/>
+<circle class="chain-node" cx="54.0" cy="92" r="5"/>
+<text class="chain-time" x="20.0" y="114" text-anchor="start">18:42</text>
+<text class="chain-room" x="20.0" y="78" text-anchor="start">Giriş Holü</text>
+<circle class="chain-node" cx="224.7" cy="92" r="5"/>
+<text class="chain-time" x="224.7" y="114" text-anchor="middle">18:43</text>
+<text class="chain-room" x="224.7" y="78" text-anchor="middle">Merdiven</text>
+<circle class="chain-node" cx="395.3" cy="44" r="5"/>
+<text class="chain-time" x="395.3" y="66" text-anchor="middle">18:45</text>
+<text class="chain-room" x="395.3" y="30" text-anchor="middle">Raf Bloğu C</text>
+<circle class="chain-node" cx="566.0" cy="92" r="5"/>
+<text class="chain-time" x="600.0" y="114" text-anchor="end">18:51</text>
+<text class="chain-room" x="600.0" y="78" text-anchor="end">Giriş Holü</text>
+<circle class="chain-tracer" r="4" cx="0" cy="0"/>
+</svg>
+        <p class="chart-note">
+          Ayrı bakıldığında dört bağımsız kayıt. Çıkışta elde kutu görüldü, olay
+          doğrulanmak üzere işaretlendi.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= OLAY KAYDI ================= -->
+<section id="kayit" class="band">
+  <div class="wrap reveal">
+    <div class="head-row">
+      <div>
+        <p class="kicker">OLAY KAYITLARI</p>
+        <h2>Olayın öncesi de kayıtta</h2>
+      </div>
+      <p class="lead">
+        Kayıt, olaydan <strong>10 saniye önce</strong> başlar — bir durumun nasıl
+        geliştiği çoğu zaman olayın kendisinden daha belirleyici. Örnek karede
+        kişiler anonimleştirilmiştir.
+      </p>
+    </div>
+
+    <div class="split">
+      <div class="clip-shell">
+        <div class="clip-bar">
+          <span class="t num">11:10</span>
+          <span class="lvl">KRİTİK</span>
+          <span class="src">CAM-02 · SEVKİYAT · ZEMİN KAT</span>
+        </div>
+<svg class="cctv" viewBox="0 0 560 315" role="img"
+     aria-label="Olay kaydından bir kare: sevkiyat alanında iki kişi arasındaki arbede,
+     yapay zeka tarafından yüzde 91 güvenle işaretlenmiş. Kişiler anonimleştirilmiştir.">
+  <defs>
+    <linearGradient id="kfbg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1D252D"/><stop offset="1" stop-color="#0D1217"/>
+    </linearGradient>
+    <filter id="kblur" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="5.5"/>
+    </filter>
+  </defs>
+  <rect width="560" height="315" fill="url(#kfbg)"/>
+
+  <!-- arka duvar ve raflar -->
+  <rect x="112" y="24" width="336" height="124" fill="#232C34"/>
+  <g stroke="#333E48" stroke-width="1" fill="none">
+    <rect x="130" y="44" width="86" height="92"/><rect x="238" y="44" width="86" height="92"/>
+    <rect x="346" y="44" width="86" height="92"/>
+    <path d="M130 75h86M130 106h86M238 75h86M238 106h86M346 75h86M346 106h86"/>
+  </g>
+  <g fill="#2B343D">
+    <rect x="136" y="50" width="34" height="22"/><rect x="180" y="54" width="30" height="18"/>
+    <rect x="244" y="81" width="36" height="22"/><rect x="290" y="84" width="28" height="18"/>
+    <rect x="352" y="50" width="32" height="22"/><rect x="394" y="112" width="32" height="20"/>
+  </g>
+
+  <!-- yan duvarlar -->
+  <path d="M0 0 112 24v124L0 190z" fill="#171E25"/>
+  <path d="M560 0 448 24v124l112 42z" fill="#171E25"/>
+  <path d="M486 52 540 44v150l-54-26z" fill="#0A0E12"/>
+
+  <!-- zemin -->
+  <path d="M112 148h336l112 42v125H0V190z" fill="#272F36"/>
+  <g stroke="#2F3941" stroke-width="1">
+    <path d="M112 148 0 315M180 148 118 315M248 148 236 315M316 148 354 315M384 148 472 315M448 148 560 300"/>
+  </g>
+  <path d="M168 148 92 315" stroke="#5D5327" stroke-width="4" opacity=".55"/>
+
+  <!-- anonimleştirilmiş siluetler -->
+  <g filter="url(#kblur)" fill="#8E99A3">
+    <ellipse cx="243" cy="196" rx="15" ry="20"/><ellipse cx="243" cy="168" rx="9" ry="10"/>
+    <ellipse cx="236" cy="228" rx="11" ry="16"/>
+    <ellipse cx="292" cy="199" rx="16" ry="21"/><ellipse cx="294" cy="170" rx="9" ry="10"/>
+    <ellipse cx="298" cy="231" rx="11" ry="16"/>
+    <ellipse cx="455" cy="214" rx="13" ry="18" opacity=".5"/>
+    <ellipse cx="455" cy="189" rx="8" ry="9" opacity=".5"/>
+  </g>
+
+  <!-- tespit kutusu -->
+  <g class="det">
+    <rect x="213" y="146" width="112" height="106" fill="none" stroke="#E2A62E" stroke-width="2"/>
+    <rect x="213" y="128" width="104" height="17" fill="#E2A62E"/>
+    <text x="219" y="141" font-family="ui-monospace,Menlo,monospace" font-size="11"
+          font-weight="600" fill="#1A1405">Arbede · %91</text>
+    <path d="M213 146h12M313 146h12M213 252h12M313 252h12" stroke="#E2A62E" stroke-width="3"/>
+  </g>
+
+  <!-- ekran bilgisi -->
+  <g font-family="ui-monospace,Menlo,monospace" font-size="11" fill="#D3DAE0">
+    <text x="14" y="22">CAM-02 SEVKİYAT</text>
+    <text x="546" y="22" text-anchor="end">02.10.2026 11:10:04</text>
+    <text x="30" y="300">REC</text>
+    <text x="546" y="300" text-anchor="end">0:14 / 0:15</text>
+  </g>
+  <circle class="rec-dot" cx="18" cy="296" r="4.5" fill="#E4694A"/>
+  <rect class="scan" x="0" y="0" width="560" height="18" fill="#9DE3F2" opacity="0"/>
+  <rect x="0" y="309" width="560" height="6" fill="#0B0F13"/>
+  <rect class="prog" x="0" y="309" width="213" height="6" fill="#E2A62E"/>
+</svg>
+        <p class="clip-txt">
+          İki kişi arasında fiziksel arbede. Biri geri itildi, olay yaklaşık 30 saniye sürdü.
+          Durum doğrulanmak üzere işaretlendi.
+        </p>
+        <div class="clip-acts">
+          <span>DEVAMINI İZLE</span><span>YANLIŞ ALARM</span><span>RAPORA EKLE</span>
+          <span>PAYLAŞ</span>
+        </div>
+      </div>
+
+      <div class="points">
+        <div class="point">
+          <h3>Bildirim aynı anda gider</h3>
+          <p>Eşik ve sessiz saatler kullanıcı bazında ayarlanır; kritik olaylar her zaman iletilir.</p>
+        </div>
+        <div class="point">
+          <h3>Tam kayda tek dokunuşla geçiş</h3>
+          <p>Oynatıcı tam kayda geçip olay saatine konumlanır. Geri sarma ve hızlandırma var.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= KURULUM ================= -->
+<section id="kurulum">
+  <div class="wrap reveal">
+    <div class="head-row">
+      <div>
+        <p class="kicker">KURULUM SEÇENEKLERİ</p>
+        <h2>Görüntü nerede işlenecek, siz seçersiniz</h2>
+      </div>
+      <p class="lead">Üç modelde de panel ve raporlar aynı çalışır.</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col"></th>
+            <th scope="col">BULUT</th>
+            <th scope="col">KURUM İÇİ (ON-PREM)</th>
+            <th scope="col">HİBRİT</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">Görüntü nerede işlenir</th>
+            <td>Türkiye'de veri merkezi</td>
+            <td>Tesisinizdeki sunucu</td>
+            <td>Analiz tesiste, rapor bulutta</td>
+          </tr>
+          <tr>
+            <th scope="row">Kayıt nerede durur</th>
+            <td>Bulut depolama</td>
+            <td>Kurum ağı içinde</td>
+            <td>Kurum ağı içinde</td>
+          </tr>
+          <tr>
+            <th scope="row">İnternet ihtiyacı</th>
+            <td>Sürekli bağlantı</td>
+            <td>Sadece yönetim erişimi</td>
+            <td>Düşük bant genişliği</td>
+          </tr>
+          <tr>
+            <th scope="row">Uygun olduğu durum</th>
+            <td>Hızlı devreye alma, çok tesis</td>
+            <td>Görüntünün çıkması yasak olan tesisler</td>
+            <td>Bant genişliği kısıtlı sahalar</td>
+          </tr>
+          <tr>
+            <th scope="row">Devreye alma süresi</th>
+            <td>Aynı gün, kendiniz</td>
+            <td>Donanım hazırsa 2–3 hafta</td>
+            <td>2 hafta</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Model ve donanım gereksinimi saha incelemesinde belirlenir.</p>
+  </div>
+</section>
+
+<!-- ================= VERİ GÜVENLİĞİ ================= -->
+<section id="guvenlik" class="band">
+  <div class="wrap reveal">
+    <div class="head-row">
+      <div>
+        <p class="kicker">VERİ GÜVENLİĞİ VE UYUM</p>
+        <h2>Çalışan görüntüsü işleniyor</h2>
+      </div>
+      <p class="lead">KVKK kapsamında. Teknik yapının yanında hukuki çerçeve de kurulur.</p>
+    </div>
+
+    <div class="grid3">
+      <div class="cell">
+        <span class="tag">KVKK</span>
+        <h3>Aydınlatma ve sözleşme</h3>
+        <p>Aydınlatma metni, bilgilendirme levhası ve veri işleyen sözleşmesi pakette.</p>
+      </div>
+      <div class="cell">
+        <span class="tag">SAKLAMA</span>
+        <h3>Üç katmanlı silme</h3>
+        <p>Ham kayıt 7–30 gün, olay klipleri 30–180 gün, görüntüsüz olay kaydı 6–24 ay. Her silme kayda geçer.</p>
+      </div>
+      <div class="cell">
+        <span class="tag">KAPSAM</span>
+        <h3>Ses kaydedilmez</h3>
+        <p>Faydası düşük, riski yüksek. Hiç kaydedilmez.</p>
+      </div>
+      <div class="cell">
+        <span class="tag">ERİŞİM</span>
+        <h3>Yetki ve kayıt izi</h3>
+        <p>Rol bazlı yetki; kimin hangi kaydı izlediği kayıt altında.</p>
+      </div>
+      <div class="cell">
+        <span class="tag">VERİ KONUMU</span>
+        <h3>Yurt içinde barındırma</h3>
+        <p>Bulutta Türkiye'de barındırılır, kurum içinde tesis dışına çıkmaz.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= ORTAKLIK ================= -->
+<section id="ortaklik" class="partner">
+  <div class="wrap reveal">
+    <div class="head-row">
+      <div>
+        <p class="kicker">ÇÖZÜM ORTAKLIĞI</p>
+        <h2>Kamera kuran firmalar için</h2>
+      </div>
+      <p class="lead">
+        Siz sahayı ve müşteriyi tanıyorsunuz, yazılım tarafını biz üstleniyoruz.
+      </p>
+    </div>
+
+    <div class="partner-grid">
+      <div class="partner-item">
+        <h3>Kendi markanızla</h3>
+        <p>Panel ve raporlar sizin kimliğinizle. Müşteri ilişkisi sizde kalır.</p>
+      </div>
+      <div class="partner-item">
+        <h3>Yinelenen gelir</h3>
+        <p>Tek seferlik kurulum bedeli yerine her tesisten aylık gelir payı.</p>
+      </div>
+      <div class="partner-item">
+        <h3>Teknik destek arkanızda</h3>
+        <p>Devreye alma ve saha sorunlarında doğrudan bize ulaşırsınız.</p>
+      </div>
+    </div>
+
+    <a class="btn" href="#basla">Ortaklık için görüşelim</a>
+  </div>
+</section>
+
+<!-- ================= PAKETLER ================= -->
+<section id="paketler">
+  <div class="wrap reveal">
+    <div class="head-row">
+      <div>
+        <p class="kicker">PAKETLER</p>
+        <h2>Tesis ve kamera sayısına göre</h2>
+      </div>
+      <p class="lead">
+        Üçü de 15 gün ücretsiz denenir, kart istemiyoruz. Yazılı teklifi deneme
+        süresi içinde iletiyoruz.
+      </p>
+    </div>
+
+    <div class="plans">
+      <article class="plan">
+        <div class="plan-name">Tek Tesis</div>
+        <p class="plan-for">Tek lokasyonlu depo, şantiye ve üretim tesisleri.</p>
+        <div class="plan-scale num">4 – 20 KAMERA</div>
+        <ul>
+          <li>Günlük otomatik rapor ve özel rapor görevleri</li>
+          <li>Olay kayıtları ve anlık bildirim</li>
+          <li>Bulut kurulum</li>
+        </ul>
+        <a class="btn ghost" href="#basla">15 gün ücretsiz</a>
+      </article>
+
+      <article class="plan pick">
+        <div class="plan-name">Çoklu Tesis</div>
+        <p class="plan-for">Birden fazla lokasyonu merkezden yönetenler.</p>
+        <div class="plan-scale num">20 – 100 KAMERA</div>
+        <ul>
+          <li>Tek Tesis paketindeki her şey</li>
+          <li>Grup görünümü ve tesisler arası kıyas</li>
+          <li>3D bina ve ısı haritası</li>
+          <li>Rol bazlı yetki, genişletilebilir kullanıcı</li>
+        </ul>
+        <a class="btn" href="#basla">15 gün ücretsiz</a>
+      </article>
+
+      <article class="plan">
+        <div class="plan-name">Kurumsal</div>
+        <p class="plan-for">Kendi veri politikası ve entegrasyonu olan kurumlar.</p>
+        <div class="plan-scale num">100+ KAMERA</div>
+        <ul>
+          <li>Çoklu Tesis paketindeki her şey</li>
+          <li>Kurum içi veya hibrit kurulum</li>
+          <li>ERP, WMS ve İSG yazılımlarıyla entegrasyon</li>
+          <li>Kurulum, eğitim ve atanmış teknik temsilci</li>
+        </ul>
+        <a class="btn ghost" href="#basla">Denemeyi başlatın</a>
+        <p class="note" style="margin-top:12px">Kurum içi kurulumu birlikte planlarız.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= SSS ================= -->
+<section class="band">
+  <div class="wrap">
+    <p class="kicker">SIKÇA SORULANLAR</p>
+    <h2>Teknik ve ticari sorular</h2>
+
+    <div class="faq">
+      <details open>
+        <summary>Mevcut kamera ve kayıt sistemimiz kullanılabilir mi?</summary>
+        <p>
+          Evet. RTSP veren tüm IP kamera ve kayıt cihazlarıyla çalışır — Hikvision,
+          Dahua, Bosch, Axis dahil. Yeni donanım gerekmez.
+        </p>
+      </details>
+      <details>
+        <summary>Görüntüler tesis dışına çıkmak zorunda mı?</summary>
+        <p>
+          Hayır. Kurum içi kurulumda görüntü ağ dışına çıkmaz; hibritte yalnızca
+          rapor ve olay özetleri merkeze gider.
+        </p>
+      </details>
+      <details>
+        <summary>Sistem her kareyi analiz ediyor mu?</summary>
+        <p>
+          Hayır, ve bunu açıkça belirtiyoruz. Hareket olmadığında analiz çalışmaz;
+          hareket olduğunda kareler düzenli aralıklarla değerlendirilir — çok kısa
+          süreli olaylar gözden kaçabilir. Sürekli kayıt kesintisiz devam eder.
+        </p>
+      </details>
+      <details>
+        <summary>Denemeye başlamak için görüşme gerekiyor mu?</summary>
+        <p>
+          Gerekmiyor. Hesabı kendiniz açıp 15 gün ücretsiz kullanırsınız. Kurum içi
+          kurulum ve 100+ kamera için önce görüşmemiz gerekir.
+        </p>
+      </details>
+      <details>
+        <summary>Mevcut yazılımlarımızla entegre olur mu?</summary>
+        <p>
+          Kurumsal pakette olay ve rapor verileri API ile dışarı aktarılır; ERP, WMS
+          ve İSG yazılımlarına bağlanabilir.
+        </p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ================= BAŞLA ================= -->
+<section id="basla">
+  <div class="wrap reveal close-grid">
+    <div>
+      <p class="kicker">BAŞLANGIÇ</p>
+      <h2>Bugün başlayın, ilk raporu yarın okuyun</h2>
+      <p class="lead">
+        Kart, sözleşme ve randevu gerekmez. Hesabı açıp kameraları bağladığınız gün
+        izleme başlar; ilk rapor ertesi sabah üretilir.
+      </p>
+
+
+      <div class="cta-row">
+        <a class="btn" href="#paketler">15 gün ücretsiz başlayın</a>
+      </div>
+    </div>
+
+    <div class="contact">
+      <h3>Konuşmayı tercih ederseniz</h3>
+      <p class="note" style="margin:0 0 20px">
+        Kurum içi barındırma, çok tesisli kurulum veya ortaklık için yazın. Tesis ve
+        kamera sayısını eklerseniz görüşmeye hazırlıklı geliriz.
+      </p>
+      <dl>
+        <div>
+          <dt>KURUMSAL SATIŞ</dt>
+          <dd>kurumsal@kestrion.com</dd>
+        </div>
+        <div>
+          <dt>ÇÖZÜM ORTAKLIĞI</dt>
+          <dd>ortaklik@kestrion.com</dd>
+        </div>
+        <div>
+          <dt>DESTEK</dt>
+          <dd>destek@kestrion.com</dd>
+        </div>
+        <div>
+          <dt>TELEFON</dt>
+          <dd class="num">+90 000 000 00 00</dd>
+        </div>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-in">
+    <span class="logo">KESTRI<b>O</b>N</span>
+    <span>Depo, üretim ve şantiye tesisleri için yapay zeka destekli kamera analizi</span>
+    <button type="button" class="theme-btn" id="theme">Temayı değiştir</button>
+  </div>
+</footer>
+
+<script>
+  // Tema düğmesi: sistem ayarını geçersiz kılar, seçim bu tarayıcıda hatırlanır.
+  (function () {
+    var btn = document.getElementById("theme");
+    if (!btn) return;
+    var root = document.documentElement;
+
+    try {
+      var saved = localStorage.getItem("kestrion-theme");
+      if (saved === "dark" || saved === "light") root.setAttribute("data-theme", saved);
+    } catch (e) { /* depolama kapalı olabilir */ }
+
+    btn.addEventListener("click", function () {
+      var dark = root.getAttribute("data-theme") === "dark" ||
+        (!root.hasAttribute("data-theme") &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches);
+      var next = dark ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try { localStorage.setItem("kestrion-theme", next); } catch (e) { /* yoksay */ }
+    });
+  })();
+
+  // Görünür olduğunda bir kez oynayan animasyonlar.
+  // Dinlenme hali zaten son hal; bu katman yalnızca hareket ekler.
+  (function () {
+    var reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (reduce.matches || !("IntersectionObserver" in window)) return;
+
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        e.target.classList.add("in");
+        io.unobserve(e.target);
+        if (e.target.classList.contains("chart") || e.target.classList.contains("zones")) {
+          stagger(e.target.querySelectorAll(".bar, .zbar"), 0.022);
+        }
+      });
+    }, { threshold: 0.18, rootMargin: "0px 0px -8% 0px" });
+
+    document.querySelectorAll(".reveal, .chart, .zones, .chain-svg, .steps, .grid3")
+      .forEach(function (el) { io.observe(el); });
+
+    function stagger(nodes, step) {
+      Array.prototype.forEach.call(nodes, function (n, i) {
+        n.style.animationDelay = (i * step).toFixed(3) + "s";
+      });
+    }
+  })();
+
+  // Sayaçlar: HTML'de son değer yazılı, JS yalnızca oraya doğru sayar.
+  (function () {
+    var els = document.querySelectorAll(".count");
+    if (!els.length) return;
+    var reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (reduce.matches || !("IntersectionObserver" in window)) return;
+
+    var fmt = new Intl.NumberFormat("tr-TR");
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        io.unobserve(e.target);
+        run(e.target);
+      });
+    }, { threshold: 0.5 });
+    Array.prototype.forEach.call(els, function (el) { io.observe(el); });
+
+    function run(el) {
+      var to = parseInt(el.getAttribute("data-to"), 10);
+      if (!isFinite(to)) return;
+      var suffix = /saat/.test(el.textContent) ? " saat" : "";
+      var sep = el.getAttribute("data-sep");
+      var t0 = performance.now(), dur = 900;
+      function tick(now) {
+        var k = Math.min(1, (now - t0) / dur);
+        var v = Math.round(to * (1 - Math.pow(1 - k, 3)));
+        el.textContent = (sep ? fmt.format(v) : String(v)) + suffix;
+        if (k < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    }
+  })();
+</script>

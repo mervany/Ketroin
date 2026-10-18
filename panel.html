@@ -1,0 +1,2527 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Kestrion Operatör Paneli</title>
+<style>
+  /* Operasyon ekranı — tek tema, bilinçli olarak koyu:
+     kamera izleme karanlık odada yapılır, açık tema göz yakar. */
+  :root { color-scheme: dark; --ink: #0B1117; }
+  html, body { height: 100%; margin: 0; background: var(--ink); }
+  #root { height: 100%; }
+  * { -webkit-tap-highlight-color: transparent; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+const { useState, useEffect, useRef } = React;
+/* =====================================================================
+   KESTRION — operatör paneli
+   Demo verisiyle çalışır. Gerçek API'ye bağlamak için aşağıdaki
+   API_BASE'i doldur ve useDemo=false yap (dosya sonundaki nota bak).
+   ===================================================================== */
+const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+.k-root {
+  /* Operasyon ekranı: koyu çelik zemin, teal kurumsal vurgu.
+     Kehribar (--signal) yalnızca durum bildirir, süs olarak kullanılmaz. */
+  --ink: #0B1117;
+  --panel: #121B23;
+  --panel-2: #17222B;
+  --line: #26343F;
+  --steel: #869BAA;
+  --paper: #E3EAEF;
+  --hi: #58B6C2;
+  --hi-soft: #10323A;
+  --signal: #E2A62E;
+  --alarm: #E4694A;
+  --ok: #5FA684;
+  --font: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  --display: 'IBM Plex Sans', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: 100%;
+  padding-bottom: 76px;
+}
+.k-root * { box-sizing: border-box; }
+.k-root button { font-family: inherit; cursor: pointer; }
+.k-root button:focus-visible,
+.k-root input:focus-visible,
+.k-root textarea:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
+
+/* --- üst çubuk --- */
+.k-top {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--ink);
+  border-bottom: 1px solid var(--line);
+  padding: 14px 18px 12px;
+  display: flex; align-items: baseline; justify-content: space-between;
+}
+.k-brand {
+  font-family: var(--display); font-weight: 600; font-size: 19px;
+  letter-spacing: 0.14em; margin: 0; white-space: nowrap;
+}
+.k-brand span { color: var(--hi); }
+.k-org { color: var(--steel); font-size: 13px; }
+
+/* --- durum şeridi: hi-vis bant --- */
+.k-strip {
+  display: flex; gap: 1px; background: var(--line);
+  border-top: 3px solid var(--hi);
+}
+.k-stat {
+  flex: 1; background: var(--panel); padding: 12px 10px; text-align: center;
+}
+.k-stat b {
+  display: block; font-family: var(--display); font-size: 26px;
+  font-weight: 600; line-height: 1;
+}
+.k-stat small { color: var(--steel); font-size: 12px; }
+.k-stat.alarm b { color: var(--alarm); }
+.k-stat.hi b { color: var(--hi); }
+
+/* --- bölümler --- */
+.k-body { padding: 18px; }
+.k-h2 {
+  font-family: var(--display); font-weight: 600; font-size: 19px;
+  margin: 0 0 4px; letter-spacing: 0.02em;
+}
+.k-sub { color: var(--steel); font-size: 13px; margin: 0 0 14px; }
+
+.k-floor {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 3px; padding: 8px 4px 4px; margin-bottom: 8px;
+}
+.k-legend {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--steel); font-size: 12px; padding: 0 10px 6px;
+}
+.k-ramp {
+  flex: 1; height: 6px; border-radius: 3px;
+  background: linear-gradient(90deg, #2C3A47, #4E7A93, #E2A62E, #E0452F);
+}
+
+/* --- kamera listesi --- */
+.k-cam {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; background: var(--panel);
+  border-left: 3px solid var(--line); margin-bottom: 6px;
+}
+.k-cam.online { border-left-color: var(--ok); }
+.k-cam.error  { border-left-color: var(--alarm); }
+.k-cam-name { font-weight: 500; }
+.k-cam-meta { color: var(--steel); font-size: 12.5px; }
+.k-mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.k-cam-right { margin-left: auto; text-align: right; font-size: 12.5px; }
+.k-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+.k-dot.online { background: var(--ok); }
+.k-dot.error  { background: var(--alarm); }
+
+/* --- olaylar --- */
+.k-ev {
+  display: flex; gap: 12px; padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.k-ev-time {
+  font-family: var(--display); font-size: 17px; font-weight: 600;
+  color: var(--steel); min-width: 46px;
+}
+.k-ev-body { flex: 1; }
+.k-ev-cam { color: var(--steel); font-size: 12.5px; margin-top: 2px; }
+.k-sev {
+  display: inline-block; width: 4px; align-self: stretch;
+  background: var(--steel); border-radius: 2px;
+}
+.k-sev.s2 { background: #7E8FA0; }
+.k-sev.s3 { background: var(--signal); }
+.k-sev.s4 { background: var(--alarm); }
+
+.k-chain {
+  background: var(--panel); border: 1px solid var(--line);
+  border-left: 3px solid var(--hi);
+  padding: 12px 14px; margin-bottom: 16px;
+}
+.k-chain-path {
+  font-family: var(--display); font-size: 15.5px;
+  color: var(--paper); line-height: 1.7; word-spacing: 2px;
+}
+.k-chain-path em { color: var(--hi); font-style: normal; }
+
+/* --- görevler & raporlar --- */
+.k-task {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--panel); border: 1px solid var(--line);
+  padding: 13px 14px; margin-bottom: 6px;
+}
+.k-clock {
+  font-family: var(--display); font-size: 21px; font-weight: 600;
+  color: var(--hi); min-width: 52px;
+}
+.k-task-off .k-clock { color: var(--steel); }
+.k-task-off { opacity: 0.55; }
+
+.k-switch {
+  margin-left: auto; width: 40px; height: 22px; border-radius: 11px;
+  border: 1px solid var(--line); background: var(--panel-2);
+  position: relative; padding: 0; flex-shrink: 0;
+}
+.k-switch i {
+  position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+  border-radius: 50%; background: var(--steel); transition: all .18s;
+}
+.k-switch.on { background: #3B4A38; border-color: var(--ok); }
+.k-switch.on i { left: 20px; background: var(--ok); }
+
+.k-report {
+  display: block; width: 100%; text-align: left;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 0; padding: 13px 14px; margin-bottom: 6px; color: inherit;
+}
+.k-report:hover { border-color: var(--steel); }
+.k-report-t { font-weight: 500; }
+.k-report-m { color: var(--steel); font-size: 12.5px; margin-top: 2px; }
+
+.k-doc { background: var(--panel); border: 1px solid var(--line); padding: 18px 16px; }
+.k-doc h1 { font-family: var(--display); font-size: 22px; margin: 0 0 2px; font-weight: 700; }
+.k-doc h2 {
+  font-family: var(--display); font-size: 16px; font-weight: 600;
+  margin: 20px 0 6px; color: var(--hi); letter-spacing: 0.02em;
+}
+.k-doc p, .k-doc li { font-size: 14.5px; }
+.k-doc ul { margin: 0; padding-left: 18px; }
+.k-doc .k-meta { color: var(--steel); font-size: 13px; margin-bottom: 4px; }
+
+/* --- sohbet --- */
+.k-msg { max-width: 88%; padding: 11px 13px; margin-bottom: 10px; font-size: 14.5px; }
+.k-msg.user { margin-left: auto; background: var(--panel-2); }
+.k-msg.ai { background: var(--panel); border-left: 3px solid var(--hi); }
+.k-msg.file {
+  margin-left: auto; background: transparent; border: 1px dashed var(--steel);
+  color: var(--steel); font-size: 13px;
+}
+.k-compose {
+  display: flex; gap: 8px; align-items: flex-end;
+  border-top: 1px solid var(--line); padding-top: 12px; margin-top: 4px;
+}
+.k-input {
+  flex: 1; background: var(--panel); border: 1px solid var(--line);
+  color: var(--paper); padding: 11px 12px; font-size: 15px; resize: none;
+  font-family: inherit;
+}
+.k-send {
+  background: var(--hi); color: var(--ink); border: 0;
+  padding: 11px 16px; font-weight: 600; font-size: 15px;
+}
+.k-send:disabled { opacity: .4; }
+.k-clip {
+  background: var(--panel); color: var(--steel);
+  border: 1px solid var(--line); padding: 11px 13px; font-size: 15px;
+}
+
+/* --- ekip --- */
+.k-slot {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--panel); border: 1px solid var(--line);
+  padding: 13px 14px; margin-bottom: 6px;
+}
+.k-slot.empty {
+  background: transparent; border-style: dashed; color: var(--steel);
+  justify-content: center; font-size: 14px;
+}
+.k-av {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--panel-2); color: var(--hi);
+  display: grid; place-items: center;
+  font-family: var(--display); font-weight: 600; font-size: 16px;
+}
+.k-role { margin-left: auto; color: var(--steel); font-size: 12.5px; }
+
+/* --- alt gezinme --- */
+.k-nav {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
+  display: flex; background: var(--panel);
+  border-top: 1px solid var(--line);
+}
+.k-nav button {
+  flex: 1; background: none; border: 0; color: var(--steel);
+  padding: 10px 2px 12px; font-size: 11.5px;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  border-top: 2px solid transparent; margin-top: -1px;
+}
+.k-nav button.on { color: var(--paper); border-top-color: var(--hi); }
+.k-nav svg { width: 20px; height: 20px; }
+
+.k-badge {
+  display: inline-block; background: var(--alarm); color: #fff;
+  font-size: 11px; font-weight: 600; padding: 1px 6px; margin-left: 6px;
+}
+
+/* --- giriş ekranı --- */
+.k-auth {
+  position: relative; min-height: 100vh; display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.k-auth-bg { position: absolute; inset: 0; opacity: .5; }
+.k-auth-veil {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(15,21,27,.35) 0%, rgba(15,21,27,.92) 62%, #0F151B 100%);
+}
+.k-auth-in {
+  position: relative; margin-top: auto; padding: 26px 22px 34px;
+}
+.k-auth h1 {
+  font-family: var(--display); font-weight: 700; font-size: 44px;
+  letter-spacing: 0.04em; margin: 0 0 6px; line-height: 1;
+}
+.k-auth h1 span { color: var(--hi); }
+.k-auth-line {
+  color: var(--steel); font-size: 15px; margin: 0 0 26px; max-width: 30ch;
+}
+.k-auth-rule { height: 3px; background: var(--hi); width: 46px; margin-bottom: 22px; }
+.k-auth .k-field { margin-bottom: 12px; }
+.k-alt {
+  background: none; border: 0; color: var(--steel); font-size: 13.5px;
+  padding: 14px 0 0; width: 100%;
+}
+.k-alt b { color: var(--hi); font-weight: 500; }
+
+/* --- 3D sahne --- */
+.k-scene { position: relative; height: 320px; touch-action: none; cursor: grab; }
+.k-scene canvas { display: block; }
+.k-scene-range {
+  position: absolute; top: 8px; left: 8px; display: flex; gap: 4px;
+}
+.k-mini {
+  background: rgba(23,32,41,.88); border: 1px solid var(--line);
+  color: var(--steel); padding: 5px 9px; font-size: 12px; height: 30px;
+}
+.k-mini.on { color: var(--hi); border-color: var(--hi); }
+.k-card {
+  position: absolute; left: 8px; right: 8px; bottom: 8px;
+  background: rgba(23,32,41,.95); border: 1px solid var(--line);
+  border-left: 3px solid var(--hi); padding: 10px 12px;
+  display: flex; align-items: center; gap: 12px;
+}
+.k-card.dead { border-left-color: var(--alarm); }
+.k-card-name { font-weight: 500; font-size: 14.5px; }
+.k-card-meta { color: var(--steel); font-size: 12.5px; }
+.k-card-num {
+  margin-left: auto; text-align: right;
+  font-family: var(--display); font-size: 24px; font-weight: 600; line-height: 1;
+}
+.k-card-num small {
+  display: block; font-family: var(--font); font-size: 11px;
+  color: var(--steel); font-weight: 400;
+}
+.k-card-x {
+  background: none; border: 0; color: var(--steel);
+  font-size: 18px; padding: 0 0 0 6px;
+}
+.k-scene:active { cursor: grabbing; }
+.k-scene-tip {
+  position: absolute; bottom: 8px; left: 12px;
+  color: var(--steel); font-size: 11.5px; pointer-events: none;
+}
+.k-scene-tools {
+  position: absolute; top: 8px; right: 8px; display: flex; gap: 4px;
+}
+.k-tool {
+  background: rgba(23,32,41,.85); border: 1px solid var(--line);
+  color: var(--steel); width: 30px; height: 30px; font-size: 15px; padding: 0;
+}
+.k-tool.on { color: var(--hi); border-color: var(--hi); }
+
+/* --- yükleme --- */
+.k-upload { display: none; }
+.k-progress {
+  height: 3px; background: var(--line); margin-top: 8px; overflow: hidden;
+}
+.k-progress i { display: block; height: 100%; background: var(--hi); transition: width .3s; }
+
+/* --- bina 3D --- */
+.k-scene-tall { height: 360px; }
+.k-lift {
+  position: absolute; top: 8px; left: 8px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.k-lift button {
+  width: 40px; height: 34px; padding: 0;
+  background: rgba(23,32,41,.9); border: 1px solid var(--line);
+  color: var(--steel); font-family: var(--display); font-weight: 600; font-size: 16px;
+}
+.k-lift button.on { background: var(--hi); border-color: var(--hi); color: var(--ink); }
+.k-lift button.all { font-family: var(--font); font-weight: 500; font-size: 11px; margin-top: 4px; }
+.k-scene-bottom { position: absolute; left: 8px; bottom: 8px; display: flex; gap: 4px; }
+
+/* --- oynatıcı --- */
+.k-player { background: #000; }
+.k-player canvas { display: block; width: 100%; height: auto; cursor: pointer; }
+.k-bigplay {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 54px; height: 54px; border-radius: 50%;
+  background: rgba(15,21,27,.72); border: 2px solid var(--paper);
+  color: var(--paper); font-size: 20px; padding: 0 0 0 4px;
+}
+.k-ended {
+  position: absolute; inset: 0; background: rgba(15,21,27,.72);
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+}
+.k-pctl {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 10px; background: var(--panel); border-top: 1px solid var(--line);
+}
+.k-pbtn {
+  background: transparent; border: 1px solid var(--line); color: var(--paper);
+  height: 32px; min-width: 34px; padding: 0 9px; font-size: 13px; flex-shrink: 0;
+}
+.k-pbtn.hi { background: var(--hi); color: var(--ink); border-color: var(--hi); font-weight: 600; }
+.k-pbtn.on { color: var(--steel); border-style: dashed; }
+.k-track { position: relative; flex: 1; height: 30px; cursor: pointer; touch-action: none; }
+.k-track-bar { position: absolute; left: 0; right: 0; top: 13px; height: 4px; background: var(--line); }
+.k-track-fill { position: absolute; left: 0; top: 13px; height: 4px; background: var(--signal); }
+.k-track-mark { position: absolute; top: 7px; width: 3px; height: 16px; background: var(--alarm); margin-left: -1px; }
+.k-track-knob {
+  position: absolute; top: 8px; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--paper); margin-left: -7px; box-shadow: 0 0 0 3px rgba(15,21,27,.6);
+}
+.k-ptime { font-family: var(--display); font-size: 14px; color: var(--steel); min-width: 58px; text-align: right; }
+.k-more {
+  display: block; width: 100%; text-align: left;
+  background: var(--panel-2); border: 0; border-top: 1px solid var(--line);
+  color: var(--signal); padding: 11px 12px; font-size: 14px; font-weight: 500;
+}
+
+/* --- olay kartı --- */
+.k-clipcard { background: var(--panel); border: 1px solid var(--line); margin-bottom: 16px; }
+.k-clipcard.s4 { border-top: 3px solid var(--alarm); }
+.k-clipcard.s3 { border-top: 3px solid var(--signal); }
+.k-clipcard.muted { opacity: .55; }
+.k-clip-head { display: flex; align-items: baseline; gap: 10px; padding: 11px 12px 9px; }
+.k-clip-time { font-family: var(--display); font-size: 23px; font-weight: 600; line-height: 1; }
+.k-tag { font-size: 11.5px; padding: 2px 7px; border: 1px solid; }
+.k-tag.s4 { color: var(--alarm); border-color: var(--alarm); }
+.k-tag.s3 { color: var(--signal); border-color: var(--signal); }
+.k-clip-body { padding: 11px 12px 0; font-size: 14.5px; }
+.k-clip-foot { display: flex; gap: 8px; padding: 10px 12px 12px; }
+
+/* --- bina yapısı listesi --- */
+.k-bld { background: var(--panel); border: 1px solid var(--line); margin-bottom: 6px; }
+.k-bld summary {
+  list-style: none; cursor: pointer; padding: 11px 14px;
+  display: flex; align-items: center; gap: 10px;
+}
+.k-bld summary::-webkit-details-marker { display: none; }
+.k-bld-lv { font-family: var(--display); font-weight: 600; font-size: 20px; color: var(--hi); width: 22px; }
+.k-room {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px; border-top: 1px solid var(--line); font-size: 14px;
+}
+.k-conf { margin-left: auto; font-size: 12px; color: var(--steel); text-align: right; }
+.k-conf.low { color: var(--signal); }
+.k-ask {
+  background: var(--panel-2); border-left: 3px solid var(--hi);
+  padding: 12px 14px; font-size: 14px; margin: 4px 0 14px;
+}
+.k-ask p { margin: 0 0 10px; }
+.k-spin {
+  display: inline-block; width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid var(--line); border-top-color: var(--hi);
+  animation: kspin .8s linear infinite; vertical-align: -2px; margin-right: 8px;
+}
+@keyframes kspin { to { transform: rotate(360deg); } }
+
+/* --- deneme uyarısı --- */
+.k-trial {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  background: var(--signal); color: #1A1405; border: 0;
+  padding: 9px 18px; font-size: 13.5px; font-weight: 500; text-align: left;
+}
+.k-trial.alarm { background: var(--alarm); color: #fff; }
+.k-trial b { font-family: var(--display); font-size: 16px; font-weight: 700; }
+.k-trial span:last-child { margin-left: auto; font-weight: 600; }
+
+/* --- hesap alt sekmeleri --- */
+.k-seg { display: flex; gap: 2px; background: var(--line); padding: 2px; margin-bottom: 18px; }
+.k-seg button {
+  flex: 1; background: var(--panel); border: 0; color: var(--steel);
+  padding: 10px 4px; font-size: 14px;
+}
+.k-seg button.on { background: var(--panel-2); color: var(--paper); box-shadow: inset 0 -2px 0 var(--hi); }
+
+/* --- abonelik --- */
+.k-sub-card { background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--hi); padding: 16px; margin-bottom: 16px; }
+.k-sub-card.alarm { border-top-color: var(--alarm); }
+.k-sub-top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.k-sub-plan { font-family: var(--display); font-size: 26px; font-weight: 700; line-height: 1; }
+.k-sub-line { color: var(--steel); font-size: 13.5px; margin-top: 8px; }
+.k-meters { display: grid; gap: 10px; margin-top: 14px; }
+.k-meter-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--steel); }
+.k-meter-row b { color: var(--paper); font-weight: 500; }
+.k-bar { height: 5px; background: var(--line); margin-top: 4px; }
+.k-bar i { display: block; height: 100%; background: var(--steel); }
+.k-bar i.hi { background: var(--signal); } .k-bar i.alarm { background: var(--alarm); }
+
+.k-toggle { display: inline-flex; background: var(--line); padding: 2px; gap: 2px; margin-bottom: 12px; }
+.k-toggle button { background: var(--panel); border: 0; color: var(--steel); padding: 8px 14px; font-size: 13.5px; }
+.k-toggle button.on { background: var(--panel-2); color: var(--paper); }
+.k-toggle small { color: var(--ok); margin-left: 6px; }
+
+.k-plan {
+  background: var(--panel); border: 1px solid var(--line); padding: 15px; margin-bottom: 8px;
+}
+.k-plan.cur { border-color: var(--hi); }
+.k-plan.off { opacity: .5; }
+.k-plan-top { display: flex; align-items: baseline; gap: 8px; }
+.k-plan-name { font-family: var(--display); font-size: 21px; font-weight: 600; }
+.k-plan-price { margin-left: auto; font-family: var(--display); font-size: 22px; font-weight: 600; }
+.k-plan-price small { font-family: var(--font); font-size: 12px; color: var(--steel); font-weight: 400; }
+.k-plan ul { margin: 8px 0 12px; padding-left: 18px; color: #C3CFD9; font-size: 13.5px; }
+.k-plan-why { color: var(--signal); font-size: 12.5px; margin: -4px 0 10px; }
+
+.k-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.k-secure {
+  display: flex; align-items: center; gap: 8px; color: var(--steel); font-size: 12.5px;
+  border: 1px dashed var(--line); padding: 9px 11px; margin-bottom: 14px;
+}
+.k-card-preview {
+  background: linear-gradient(135deg, #1F2A35, #2C3A47); border: 1px solid var(--line);
+  padding: 16px; margin-bottom: 14px; font-family: ui-monospace, Menlo, monospace;
+}
+.k-card-preview .n { font-size: 17px; letter-spacing: .12em; margin: 18px 0 10px; }
+.k-card-preview .r { display: flex; justify-content: space-between; font-size: 12px; color: var(--steel); }
+.k-total { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 0; border-top: 1px solid var(--line); margin-top: 4px; }
+.k-total b { font-family: var(--display); font-size: 24px; }
+.k-inv { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-top: 0; font-size: 14px; }
+.k-inv:first-of-type { border-top: 1px solid var(--line); }
+.k-inv .k-conf { font-size: 13px; }
+.k-link { background: none; border: 0; color: var(--steel); padding: 12px 0; font-size: 13.5px; text-decoration: underline; text-underline-offset: 3px; }
+.k-danger { color: var(--alarm); }
+
+/* --- tesis seçici --- */
+.k-site-pick {
+  margin-left: auto; display: flex; align-items: center; gap: 8px;
+  background: var(--panel); border: 1px solid var(--line); color: var(--paper);
+  padding: 7px 11px; font-size: 13.5px; max-width: 62%;
+}
+.k-site-pick span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.k-site-pick small { color: var(--steel); font-family: var(--mono); font-size: 10.5px; }
+.k-site-pick i { color: var(--steel); font-style: normal; font-size: 11px; }
+.k-site-menu { background: var(--panel); border-bottom: 1px solid var(--line); }
+.k-site-menu-head {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: var(--steel);
+  padding: 10px 18px 6px;
+}
+.k-site-menu button {
+  display: flex; align-items: center; gap: 11px; width: 100%; text-align: left;
+  background: none; border: 0; border-top: 1px solid var(--line);
+  color: var(--paper); padding: 12px 18px; font-size: 14.5px;
+}
+.k-site-menu button.on { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--hi); }
+.k-site-alerts {
+  margin-left: auto; background: var(--signal); color: #1A1405;
+  font-family: var(--mono); font-size: 11px; font-weight: 500; padding: 1px 7px;
+}
+
+/* --- grup şeridi --- */
+.k-group { display: flex; gap: 1px; background: var(--line); border-bottom: 1px solid var(--line); }
+.k-group button {
+  flex: 1; background: var(--panel); border: 0; color: var(--steel);
+  padding: 10px 6px; font-size: 11.5px; display: grid; gap: 3px; justify-items: center;
+}
+.k-group button.on { background: var(--panel-2); color: var(--paper); box-shadow: inset 0 -2px 0 var(--hi); }
+.k-group b { font-family: var(--display); font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+.k-group button.warn b { color: var(--signal); }
+
+/* --- rol ve kayıt izi --- */
+.k-audit {
+  background: var(--panel); border: 1px solid var(--line); margin-top: 8px;
+}
+.k-audit-row {
+  display: flex; align-items: baseline; gap: 10px; padding: 10px 14px;
+  border-top: 1px solid var(--line); font-size: 13.5px;
+}
+.k-audit-row:first-child { border-top: 0; }
+.k-audit-row time { font-family: var(--mono); font-size: 11.5px; color: var(--steel); min-width: 40px; }
+.k-audit-row span:last-child { margin-left: auto; color: var(--steel); font-size: 12px; }
+
+/* --- gün başlığı ve arşiv --- */
+.k-dayhead {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--panel); border: 1px solid var(--line);
+  padding: 11px 13px; margin-bottom: 16px;
+}
+.k-day {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--panel); border: 1px solid var(--line);
+  padding: 12px 13px; margin-bottom: 8px;
+}
+.k-day-l { min-width: 0; }
+.k-day-t { font-size: 14px; font-weight: 500; }
+.k-day-m { color: var(--steel); font-size: 12.5px; margin-top: 2px; }
+
+/* --- saklama süreleri --- */
+.k-keep { background: var(--panel); border: 1px solid var(--line); margin-top: 10px; }
+.k-keep-row {
+  display: flex; align-items: flex-start; gap: 12px; padding: 13px 14px;
+  border-top: 1px solid var(--line);
+}
+.k-keep-row:first-child { border-top: 0; }
+.k-keep-d {
+  font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--hi);
+  min-width: 62px; letter-spacing: -.01em;
+}
+.k-keep-t { font-size: 13.5px; margin-bottom: 2px; }
+.k-keep-m { color: var(--steel); font-size: 12.5px; line-height: 1.45; }
+.k-pin { border-color: var(--signal); color: var(--signal); }
+.k-pin.on { background: var(--signal); border-color: var(--signal); color: #16120A; }
+
+/* --- formlar --- */
+.k-field { margin-bottom: 16px; }
+.k-label { display: block; font-size: 13.5px; color: var(--paper); margin-bottom: 6px; }
+.k-hint { color: var(--steel); font-size: 12.5px; margin: -2px 0 7px; }
+.k-text {
+  width: 100%; background: var(--panel); border: 1px solid var(--line);
+  color: var(--paper); padding: 11px 12px; font-size: 15px;
+  font-family: inherit; resize: vertical;
+}
+.k-text::placeholder { color: #55677A; }
+.k-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.k-chip {
+  background: var(--panel); border: 1px solid var(--line);
+  color: var(--steel); padding: 7px 11px; font-size: 13.5px;
+}
+.k-chip.on { background: var(--panel-2); border-color: var(--hi); color: var(--hi); }
+.k-times { display: flex; gap: 8px; align-items: center; }
+.k-times .k-text { width: auto; flex: 1; }
+.k-primary {
+  width: 100%; background: var(--hi); color: var(--ink); border: 0;
+  padding: 14px; font-weight: 600; font-size: 15.5px;
+  font-family: var(--display); letter-spacing: 0.03em;
+}
+.k-primary:disabled { opacity: .35; }
+.k-ghost {
+  width: 100%; background: transparent; color: var(--steel);
+  border: 1px solid var(--line); padding: 12px; font-size: 14.5px;
+}
+.k-preview {
+  background: var(--panel-2); border-left: 3px solid var(--hi);
+  padding: 13px 14px; font-size: 13.5px; white-space: pre-wrap;
+  color: #C3CFD9; line-height: 1.6;
+}
+.k-preset {
+  display: block; width: 100%; text-align: left; color: inherit;
+  background: var(--panel); border: 1px solid var(--line);
+  padding: 12px 13px; margin-bottom: 6px;
+}
+.k-preset.on { border-color: var(--hi); background: var(--panel-2); }
+.k-preset b { display: block; font-weight: 500; margin-bottom: 2px; }
+.k-preset span { color: var(--steel); font-size: 12.5px; }
+.k-steps { color: var(--steel); font-size: 12.5px; margin-bottom: 18px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .k-root * { transition: none !important; animation: none !important; }
+}
+`;
+/* ===================== demo verisi ===================== */
+// ---------------------------------------------------------------------
+// BİNA: 3 kat × 7 oda. Gerçekte bu yapıyı AI kameralardan çıkarır
+// (GET /orgs/{id}/layout). Yerleşim algoritması backend'deki place_rooms ile aynı.
+// ---------------------------------------------------------------------
+const BUILDING_W = 12;
+const ROOM_D = 3.2;
+const CORRIDOR_D = 1.4;
+const BUILDING_D = ROOM_D * 2 + CORRIDOR_D;
+const FLOOR_GAP = 3.1;
+const KIND_WEIGHT = { storage: 3, loading: 3, production: 3, cold_room: 2, entrance: 2, office: 2, corridor: 2, stairs: 1, other: 2 };
+const KIND_LABEL = {
+    entrance: "Giriş", loading: "Yükleme", storage: "Depolama", cold_room: "Soğuk oda",
+    production: "Üretim", office: "Ofis", corridor: "Koridor", stairs: "Merdiven", other: "Diğer",
+};
+const FLOORS_RAW = [
+    { level: 0, name: "Zemin Kat", short: "Z", rooms: [
+            ["Giriş Holü", "entrance"], ["Sevkiyat", "loading"], ["Yükleme Rampası", "loading"],
+            ["Raf A", "storage"], ["Raf B", "storage"], ["Güvenlik", "office"], ["Merdiven", "stairs"],
+        ] },
+    { level: 1, name: "1. Kat", short: "1", rooms: [
+            ["Raf C", "storage"], ["Raf D", "storage"], ["Soğuk Oda", "cold_room"],
+            ["Paketleme", "production"], ["Kalite Kontrol", "office"], ["Koridor", "corridor"], ["Merdiven", "stairs"],
+        ] },
+    { level: 2, name: "2. Kat", short: "2", rooms: [
+            ["Ofis", "office"], ["Toplantı", "office"], ["Arşiv", "storage"],
+            ["Yedek Parça", "storage"], ["Malzeme", "storage"], ["Mutfak", "other"], ["Merdiven", "stairs"],
+        ] },
+];
+const LOW_CONFIDENCE = { "2-2": 0.52, "1-5": 0.64, "2-5": 0.71 };
+function layoutRooms(floors) {
+    const out = [];
+    floors.forEach((f) => {
+        const items = f.rooms.map(([name, kind], i) => ({
+            id: `${f.level}-${i}`, level: f.level, floor: f.name, name, kind,
+            confidence: LOW_CONFIDENCE[`${f.level}-${i}`] || 0.86 + ((i * 7 + f.level * 3) % 12) / 100,
+        }));
+        const stairs = items.filter((r) => r.kind === "stairs");
+        const others = items.filter((r) => r.kind !== "stairs");
+        const half = Math.ceil(others.length / 2);
+        const rows = [[others.slice(0, half), 0], [[...others.slice(half), ...stairs], ROOM_D + CORRIDOR_D]];
+        rows.forEach(([row, y]) => {
+            const total = row.reduce((a, r) => a + (KIND_WEIGHT[r.kind] || 2), 0);
+            let x = 0;
+            row.forEach((r) => {
+                const w = (BUILDING_W * (KIND_WEIGHT[r.kind] || 2)) / total;
+                Object.assign(r, { x, y, w, h: ROOM_D });
+                x += w;
+            });
+        });
+        out.push(...items);
+    });
+    return out;
+}
+const ROOMS = layoutRooms(FLOORS_RAW);
+// Merdivende sadece zeminde kamera var; üst katlara geçişleri AI hareketlerden öğreniyor
+const DOWN = { "Yükleme Rampası": "20:04", "Arşiv": "09:12" };
+const CAMERAS = ROOMS
+    .filter((r) => r.kind !== "stairs" || r.level === 0)
+    .map((r, i) => ({
+    id: `c${i + 1}`,
+    code: `CAM-${String(i + 1).padStart(2, "0")}`,
+    name: r.name,
+    roomId: r.id,
+    level: r.level,
+    zone: r.floor,
+    status: DOWN[r.name] ? "error" : "online",
+    downSince: DOWN[r.name],
+}));
+const camOfRoom = (roomId) => CAMERAS.find((c) => c.roomId === roomId);
+const ACTIVE_ROOMS = ROOMS.filter((r) => { var _a; return ((_a = camOfRoom(r.id)) === null || _a === void 0 ? void 0 : _a.status) === "online"; });
+// "Bugün" görünümü için birikmiş günlük yoğunluk (demo)
+const DAY_HEAT = (() => {
+    const h = {};
+    const hot = { "Giriş Holü": 0.9, "Sevkiyat": 0.95, "Raf A": 0.6, "Raf B": 0.45, "Paketleme": 0.85,
+        "Raf C": 0.55, "Soğuk Oda": 0.3, "Ofis": 0.4, "Mutfak": 0.5, "Güvenlik": 0.25 };
+    ROOMS.forEach((r, i) => {
+        var _a, _b;
+        const on = ((_a = camOfRoom(r.id)) === null || _a === void 0 ? void 0 : _a.status) === "online";
+        h[r.id] = on ? ((_b = hot[r.name]) !== null && _b !== void 0 ? _b : 0.12 + ((i * 13) % 20) / 100) : 0;
+    });
+    return h;
+})();
+const EVENT_DATE = "2026-09-02";
+const SEED_EVENTS = [
+    { id: "e2", t: "18:51:00", cam: "Giriş Holü", floor: "Zemin Kat", sev: 3, scene: "carry",
+        label: "Kutu çıkışı", conf: 78, text: "Mesai sonrası bir kişi elinde kutuyla dışarı çıktı." },
+    { id: "e3", t: "18:45:00", cam: "Raf C", floor: "1. Kat", sev: 2, text: "Bir kişi raf önünde 4 dakika hareketsiz durdu" },
+    { id: "e4", t: "18:43:00", cam: "Merdiven", floor: "Zemin Kat", sev: 1, text: "Bir kişi merdivenle yukarı çıktı" },
+    { id: "e5", t: "18:42:00", cam: "Giriş Holü", floor: "Zemin Kat", sev: 1, text: "Bir kişi içeri girdi" },
+    { id: "e6", t: "17:20:00", cam: "Yükleme Rampası", floor: "Zemin Kat", sev: 3, scene: "ppe",
+        label: "Baret yok", conf: 84, text: "Rampada baretsiz çalışan." },
+    { id: "e7", t: "16:05:00", cam: "Paketleme", floor: "1. Kat", sev: 1, text: "Forklift geçişi" },
+    { id: "e1", t: "11:10:00", cam: "Sevkiyat", floor: "Zemin Kat", sev: 4, scene: "fight",
+        label: "Arbede", conf: 91, text: "İki kişi arasında fiziksel arbede. Biri geri itildi, yaklaşık 30 sn sürdü." },
+];
+// "Devamını izle" zaman çizgisindeki işaretler (saniye, olay anına göre)
+const FULL_MARKS = {
+    e1: [[0, "Arbede başladı"], [28, "Taraflar ayrıldı"], [95, "Güvenlik alana geldi"]],
+    e2: [[-40, "Raf önünde bekleme"], [0, "Kutuyla çıkış"]],
+    e6: [[0, "Baretsiz çalışan"], [60, "Alandan ayrıldı"]],
+};
+const TASKS = [
+    { id: "t1", clock: "18:00", title: "Gün Sonu Genel Raporu", freq: "Her gün · son 24 saat", on: true },
+    { id: "t2", clock: "08:00", title: "Gece Vardiyası Güvenlik", freq: "Her gün · son 12 saat", on: true },
+    { id: "t3", clock: "09:00", title: "Haftalık Performans", freq: "Pazartesi · son 7 gün", on: false },
+];
+const REPORTS = [
+    { id: "r1", title: "Gün Sonu Genel Raporu", when: "Bugün 18:00", meta: "412 olay · 19 kamera · 3 kat" },
+    { id: "r2", title: "Kayıt İncelemesi — rampa_0902.mp4", when: "Bugün 14:12", meta: "Yüklenen video · 26 bulgu" },
+    { id: "r3", title: "Gece Vardiyası Güvenlik", when: "Bugün 08:00", meta: "38 olay · 2 uyarı" },
+];
+const SECTORS = [
+    ["inşaat", "İnşaat / şantiye"],
+    ["lojistik", "Depo / lojistik"],
+    ["üretim", "Üretim / fabrika"],
+    ["perakende", "Perakende / mağaza"],
+    ["soğuk_hava", "Soğuk hava deposu"],
+    ["diğer", "Diğer"],
+];
+const SAFETY_RULES = ["Baret zorunlu", "Yelek zorunlu", "Çelik burun ayakkabı", "Yaya yolu dışına çıkılmaz"];
+const PRIORITIES = ["Hırsızlık", "İş güvenliği", "Vardiya takibi", "Sevkiyat", "Bölge doluluğu"];
+const DAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
+const PRESETS = [
+    { key: "shift", title: "Vardiya Giriş-Çıkış Raporu", clock: "18:00",
+        desc: "Gün içindeki tüm giriş ve çıkışlar, ilk giriş ve son çıkış saati, mesai dışı hareketler.",
+        instructions: "Gün içindeki tüm giriş ve çıkış hareketlerini kronolojik listele. Her biri için saat, kamera ve kişi sayısı ver. İlk giriş ve son çıkış saatlerini belirt. Mesai dışı giriş-çıkışları ayrı başlıkta topla." },
+    { key: "safety", title: "İş Güvenliği Raporu", clock: "18:00",
+        desc: "Ekipman ihlalleri, tehlikeli manevralar, makine-yaya yakınlaşmaları.",
+        instructions: "Koruyucu ekipman ihlallerini, tehlikeli manevraları ve makine-yaya yakınlaşmalarını listele. Tekrar eden ihlalleri bölge bazında topla." },
+    { key: "night", title: "Gece Hareketi Raporu", clock: "08:00",
+        desc: "Sadece mesai dışı hareketler, süre ve kişi sayısıyla.",
+        instructions: "Sadece mesai saatleri dışındaki hareketleri incele. Her hareket için saat, kamera, süre ve kişi sayısı. Hareket yoksa açıkça yaz." },
+    { key: "loading", title: "Yükleme-Sevkiyat Raporu", clock: "19:00",
+        desc: "Araç geliş-gidişleri, rampada kalma süreleri, boş beklemeler.",
+        instructions: "Yükleme rampasındaki araç geliş-gidişlerini, her aracın rampada kaldığı süreyi ve boş bekleme sürelerini raporla." },
+    { key: "custom", title: "Kendim yazayım", clock: "18:00",
+        desc: "Ne izlenip raporlanacağını kendi cümlelerinizle tanımlayın.",
+        instructions: "" },
+];
+const TEAM = [
+    { name: "Mervan", role: "Hesap sahibi · tüm tesisler" },
+    { name: "Ahmet", role: "Operatör · Çerkezköy" },
+];
+const MAX_USERS = 3;
+// Çok tesisli yapı — site "grup görünümü" vaat ediyor, panel de göstermeli.
+const SITES = [
+    { name: "Çerkezköy Üretim", cams: 19, down: 1, events: 412, alerts: 3 },
+    { name: "Gebze Lojistik Merkezi", cams: 38, down: 0, events: 1284, alerts: 0 },
+    { name: "Adana Depo", cams: 12, down: 1, events: 268, alerts: 1 },
+];
+const SITE_TOTAL = SITES.reduce((a, s) => a + s.cams, 0);
+// Abonelik planları — GET /plans ile gelir. FİYATLAR TASLAK.
+const PLANS = [
+    { key: "starter", name: "Başlangıç", cams: 4, days: 7, monthly: 1490, yearly: 14900 },
+    { key: "pro", name: "Pro", cams: 20, days: 14, monthly: 4990, yearly: 49900 },
+    { key: "enterprise", name: "Kurumsal", cams: 50, days: 30, monthly: 11990, yearly: 119900 },
+];
+const BILLING_PROVIDER = "PayTR"; // .env BILLING_PROVIDER — iyzico'da iyzico'nun kendi formu açılır
+const tl = (n) => new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 }).format(n) + " TL";
+const fmtDate = (d) => d.toLocaleDateString("tr-TR", { day: "numeric", month: "long" });
+/* ===================== izometrik zemin ===================== */
+function Building3D({ heat, hero = false }) {
+    const mount = useRef(null);
+    const [floor, setFloor] = useState(hero ? "all" : 0);
+    const [spin, setSpin] = useState(hero);
+    const [view, setView] = useState("3d");
+    const [bars, setBars] = useState(false);
+    const [range, setRange] = useState("15dk");
+    const [picked, setPicked] = useState(null);
+    const heatRef = useRef(heat);
+    const floorRef = useRef(floor);
+    const spinRef = useRef(hero);
+    const viewRef = useRef("3d");
+    const barsRef = useRef(false);
+    const pickRef = useRef(null);
+    const floorSetRef = useRef(null);
+    pickRef.current = setPicked;
+    floorSetRef.current = setFloor;
+    useEffect(() => {
+        const out = {};
+        ROOMS.forEach((r) => {
+            const live = heat[r.id] || 0;
+            out[r.id] = range === "15dk" ? live
+                : range === "1sa" ? Math.min(1, live * 0.5 + (DAY_HEAT[r.id] || 0) * 0.55)
+                    : DAY_HEAT[r.id] || 0;
+        });
+        heatRef.current = out;
+    }, [heat, range]);
+    useEffect(() => { floorRef.current = floor; }, [floor]);
+    useEffect(() => { spinRef.current = spin; }, [spin]);
+    useEffect(() => { viewRef.current = view; }, [view]);
+    useEffect(() => { barsRef.current = bars; }, [bars]);
+    useEffect(() => {
+        const el = mount.current;
+        if (!el)
+            return;
+        const W = el.clientWidth || 340;
+        const H = el.clientHeight || 340;
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.Fog(0x0f151b, 22, 44);
+        const camera = new THREE.PerspectiveCamera(40, W / H, 0.1, 120);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(W, H);
+        el.appendChild(renderer.domElement);
+        scene.add(new THREE.AmbientLight(0x8fa6b8, 0.62));
+        const sun = new THREE.DirectionalLight(0xffffff, 0.7);
+        sun.position.set(8, 16, 10);
+        scene.add(sun);
+        const rim = new THREE.DirectionalLight(0x58b6c2, 0.22);
+        rim.position.set(-10, 6, -8);
+        scene.add(rim);
+        const X0 = -BUILDING_W / 2, Z0 = -BUILDING_D / 2;
+        const corridorZ = Z0 + ROOM_D + CORRIDOR_D / 2;
+        const roomCenter = (r) => [X0 + r.x + r.w / 2, Z0 + r.y + r.h / 2];
+        // Her katın malzemeleri: kat seçilince diğerleri soluklaşsın
+        const floorState = FLOORS_RAW.map(() => ({ mats: [], labels: [], factor: 1 }));
+        const track = (level, mat, base) => {
+            mat.transparent = true;
+            mat.opacity = base;
+            floorState[level].mats.push([mat, base]);
+            return mat;
+        };
+        const roomMeshes = [];
+        const hitTargets = [];
+        const pulses = [];
+        const labelTex = [];
+        const makeLabel = (text) => {
+            const c = document.createElement("canvas");
+            c.width = 256;
+            c.height = 64;
+            const g = c.getContext("2d");
+            g.font = "600 26px 'IBM Plex Sans', system-ui, sans-serif";
+            g.textAlign = "center";
+            g.textBaseline = "middle";
+            g.fillStyle = "rgba(15,21,27,0.72)";
+            const tw = Math.min(250, g.measureText(text).width + 22);
+            g.fillRect(128 - tw / 2, 12, tw, 40);
+            g.fillStyle = "#E6EBEF";
+            g.fillText(text, 128, 33);
+            const tex = new THREE.CanvasTexture(c);
+            labelTex.push(tex);
+            return tex;
+        };
+        FLOORS_RAW.forEach((f) => {
+            const Y = f.level * FLOOR_GAP;
+            const slab = new THREE.Mesh(new THREE.BoxGeometry(BUILDING_W + 0.3, 0.12, BUILDING_D + 0.3), track(f.level, new THREE.MeshLambertMaterial({ color: 0x1b242e }), 0.96));
+            slab.position.y = Y - 0.06;
+            scene.add(slab);
+            const outline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(BUILDING_W + 0.3, 1.1, BUILDING_D + 0.3)), track(f.level, new THREE.LineBasicMaterial({ color: 0x3a4b5b }), 0.9));
+            outline.position.y = Y + 0.55;
+            scene.add(outline);
+            ROOMS.filter((r) => r.level === f.level).forEach((r) => {
+                const [cx, cz] = roomCenter(r);
+                const walls = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(r.w - 0.08, 0.75, r.h - 0.08)), track(f.level, new THREE.LineBasicMaterial({ color: 0x3a4b5b }), 0.9));
+                walls.position.set(cx, Y + 0.375, cz);
+                scene.add(walls);
+                const tileMat = new THREE.MeshBasicMaterial({ color: 0x2c3a47, transparent: true, depthWrite: false });
+                const tile = new THREE.Mesh(new THREE.PlaneGeometry(r.w - 0.14, r.h - 0.14), tileMat);
+                tile.rotation.x = -Math.PI / 2;
+                tile.position.set(cx, Y + 0.012, cz);
+                tile.userData.room = r;
+                scene.add(tile);
+                hitTargets.push(tile);
+                const barMat = new THREE.MeshLambertMaterial({ color: 0x58b6c2, transparent: true });
+                const bar = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1, 0.5), barMat);
+                bar.position.set(cx, Y, cz);
+                bar.visible = false;
+                scene.add(bar);
+                // depolama odalarında alçak raf blokları
+                if (r.kind === "storage") {
+                    const rackMat = track(f.level, new THREE.MeshLambertMaterial({ color: 0x2f5f8a }), 0.85);
+                    const beamMat = track(f.level, new THREE.MeshLambertMaterial({ color: 0xd9791a }), 0.9);
+                    [-0.28, 0.28].forEach((dz) => {
+                        const rack = new THREE.Mesh(new THREE.BoxGeometry(r.w * 0.66, 0.62, 0.34), rackMat);
+                        rack.position.set(cx, Y + 0.31, cz + dz * r.h);
+                        scene.add(rack);
+                        const beam = new THREE.Mesh(new THREE.BoxGeometry(r.w * 0.68, 0.05, 0.38), beamMat);
+                        beam.position.set(cx, Y + 0.64, cz + dz * r.h);
+                        scene.add(beam);
+                    });
+                }
+                const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: makeLabel(r.name), transparent: true, depthWrite: false }));
+                label.scale.set(2.3, 0.58, 1);
+                label.position.set(cx, Y + 1.15, cz);
+                label.visible = false;
+                scene.add(label);
+                floorState[f.level].labels.push(label);
+                const cam = camOfRoom(r.id);
+                if (cam) {
+                    const dead = cam.status !== "online";
+                    const px = X0 + r.x + 0.3, pz = Z0 + r.y + 0.3;
+                    const head = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.3, 8), track(f.level, new THREE.MeshLambertMaterial({ color: dead ? 0xe4694a : 0x58b6c2 }), 1));
+                    head.position.set(px, Y + 1.25, pz);
+                    head.rotation.x = Math.PI;
+                    scene.add(head);
+                    const hit = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 6), new THREE.MeshBasicMaterial({ visible: false }));
+                    hit.position.copy(head.position);
+                    hit.userData.room = r;
+                    scene.add(hit);
+                    hitTargets.push(hit);
+                    if (dead) {
+                        const ring = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.36, 24), new THREE.MeshBasicMaterial({ color: 0xe4694a, transparent: true, side: THREE.DoubleSide }));
+                        ring.rotation.x = -Math.PI / 2;
+                        ring.position.set(cx, Y + 0.03, cz);
+                        ring.userData.level = f.level;
+                        scene.add(ring);
+                        pulses.push(ring);
+                    }
+                }
+                roomMeshes.push({ room: r, tileMat, bar, barMat, current: 0 });
+            });
+        });
+        // merdiven boşluğu: katları dikeyde bağlar
+        const stairRoom = ROOMS.find((r) => r.kind === "stairs" && r.level === 0);
+        const [sx, sz] = roomCenter(stairRoom);
+        const shaftH = FLOOR_GAP * (FLOORS_RAW.length - 1) + 0.9;
+        const shaft = new THREE.Mesh(new THREE.BoxGeometry(stairRoom.w - 0.3, shaftH, stairRoom.h - 0.4), new THREE.MeshLambertMaterial({ color: 0x2f5f8a, transparent: true, opacity: 0.13, depthWrite: false }));
+        shaft.position.set(sx, shaftH / 2, sz);
+        scene.add(shaft);
+        const shaftEdge = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(stairRoom.w - 0.3, shaftH, stairRoom.h - 0.4)), new THREE.LineBasicMaterial({ color: 0x4e7a93, transparent: true, opacity: 0.6 }));
+        shaftEdge.position.copy(shaft.position);
+        scene.add(shaftEdge);
+        const stepMat = new THREE.MeshLambertMaterial({ color: 0x44586a });
+        FLOORS_RAW.slice(0, -1).forEach((f) => {
+            for (let k = 0; k < 6; k++) {
+                const step = new THREE.Mesh(new THREE.BoxGeometry(stairRoom.w * 0.5, 0.08, 0.34), stepMat);
+                step.position.set(sx, f.level * FLOOR_GAP + (k + 1) * (FLOOR_GAP / 7), sz - stairRoom.h * 0.3 + k * 0.36);
+                scene.add(step);
+            }
+        });
+        // --- sahadaki kişiler: katlar arası merdivenle geçebilir ---
+        const vestMat = new THREE.MeshLambertMaterial({ color: 0x58b6c2 });
+        const skinMat = new THREE.MeshLambertMaterial({ color: 0xc9d4dd });
+        const walkRooms = ACTIVE_ROOMS.filter((r) => r.kind !== "stairs");
+        const people = [0, 1, 2, 3, 4, 5].map((n) => {
+            const g = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.34, 8), vestMat);
+            body.position.y = 0.34;
+            const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.2, 8), skinMat);
+            legs.position.y = 0.1;
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 8), skinMat);
+            head.position.y = 0.6;
+            g.add(body, legs, head);
+            const start = walkRooms[(n * 5) % walkRooms.length];
+            const [px, pz] = roomCenter(start);
+            g.position.set(px, start.level * FLOOR_GAP, pz);
+            scene.add(g);
+            return { g, level: start.level, path: [], wait: n * 0.7 };
+        });
+        const planRoute = (p) => {
+            const sameFloor = Math.random() < 0.78;
+            const pool = walkRooms.filter((r) => (sameFloor ? r.level === p.level : r.level !== p.level));
+            const target = pool[Math.floor(Math.random() * pool.length)] || walkRooms[0];
+            const [tx, tz] = roomCenter(target);
+            const jitter = () => (Math.random() - 0.5) * 0.6;
+            const curY = p.level * FLOOR_GAP;
+            const route = [[p.g.position.x, curY, corridorZ]];
+            if (target.level !== p.level) {
+                const ty = target.level * FLOOR_GAP;
+                route.push([sx, curY, corridorZ], [sx, curY, sz], [sx, ty, sz], [sx, ty, corridorZ]);
+            }
+            const ty = target.level * FLOOR_GAP;
+            route.push([tx, ty, corridorZ], [tx + jitter(), ty, tz + jitter()]);
+            p.path = route.map(([x, y, z]) => new THREE.Vector3(x, y, z));
+            p.targetLevel = target.level;
+        };
+        // --- kamera ---
+        let az = hero ? -0.7 : -0.55, azT = az;
+        let elev = hero ? 0.5 : 0.62, elevT = elev;
+        let dist = hero ? 23 : 16, distT = dist;
+        let lookY = hero ? FLOOR_GAP : 0, lookYT = lookY;
+        let appliedFloor = floorRef.current;
+        let appliedView = "3d";
+        const place = () => {
+            camera.position.set(Math.sin(az) * Math.cos(elev) * dist, lookY + Math.sin(elev) * dist, Math.cos(az) * Math.cos(elev) * dist);
+            camera.lookAt(0, lookY, 0);
+        };
+        place();
+        // --- etkileşim ---
+        let dragging = false, lastX = 0, lastY = 0, pinch = 0, moved = 0;
+        const raycaster = new THREE.Raycaster();
+        const ndc = new THREE.Vector2();
+        const point = (e) => (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
+        const down = (e) => {
+            dragging = true;
+            moved = 0;
+            spinRef.current = false;
+            const t = point(e);
+            lastX = t.clientX;
+            lastY = t.clientY;
+        };
+        const move = (e) => {
+            if (e.touches && e.touches.length === 2) {
+                const [a, b] = e.touches;
+                const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+                if (pinch)
+                    distT = Math.min(34, Math.max(7, distT * (pinch / d)));
+                pinch = d;
+                moved = 99;
+                e.preventDefault();
+                return;
+            }
+            if (!dragging)
+                return;
+            const t = point(e);
+            const dx = t.clientX - lastX, dy = t.clientY - lastY;
+            moved += Math.abs(dx) + Math.abs(dy);
+            az -= dx * 0.008;
+            azT = az;
+            elev = Math.min(1.5, Math.max(0.1, elev + dy * 0.006));
+            elevT = elev;
+            lastX = t.clientX;
+            lastY = t.clientY;
+            place();
+            e.preventDefault();
+        };
+        const up = (e) => {
+            const tap = dragging && moved < 8;
+            dragging = false;
+            pinch = 0;
+            if (!tap)
+                return;
+            const t = point(e);
+            const rect = renderer.domElement.getBoundingClientRect();
+            ndc.x = ((t.clientX - rect.left) / rect.width) * 2 - 1;
+            ndc.y = -((t.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(ndc, camera);
+            const fl = floorRef.current;
+            const visible = hitTargets.filter((o) => fl === "all" || o.userData.room.level === fl);
+            const hit = raycaster.intersectObjects(visible)[0];
+            if (!hit) {
+                pickRef.current(null);
+                return;
+            }
+            const room = hit.object.userData.room;
+            if (fl === "all")
+                floorSetRef.current(room.level);
+            const v = heatRef.current[room.id] || 0;
+            const cam = camOfRoom(room.id);
+            pickRef.current({
+                room, cam,
+                events: cam && cam.status === "online" ? Math.round(v * 26) + 2 : 0,
+            });
+        };
+        const wheel = (e) => {
+            distT = Math.min(34, Math.max(7, distT + e.deltaY * 0.012));
+            e.preventDefault();
+        };
+        if (!hero) {
+            el.addEventListener("mousedown", down);
+            el.addEventListener("touchstart", down, { passive: true });
+            window.addEventListener("mousemove", move);
+            el.addEventListener("touchmove", move, { passive: false });
+            window.addEventListener("mouseup", up);
+            el.addEventListener("touchend", up);
+            el.addEventListener("wheel", wheel, { passive: false });
+        }
+        // --- döngü ---
+        const cold = new THREE.Color(0x16343c);
+        const warm = new THREE.Color(0x1f6b7b);
+        const hot = new THREE.Color(0x2ba8be);
+        const alarm = new THREE.Color(0xe2a62e);
+        const tmp = new THREE.Color();
+        let raf, last = performance.now();
+        const tick = (now) => {
+            raf = requestAnimationFrame(tick);
+            const dt = Math.min(0.05, (now - last) / 1000);
+            last = now;
+            const fl = floorRef.current;
+            if (fl !== appliedFloor) {
+                appliedFloor = fl;
+                lookYT = fl === "all" ? FLOOR_GAP : fl * FLOOR_GAP;
+                distT = fl === "all" ? 23 : 16;
+            }
+            if (viewRef.current !== appliedView) {
+                appliedView = viewRef.current;
+                elevT = appliedView === "top" ? 1.5 : 0.62;
+                if (appliedView === "top")
+                    azT = Math.round(az / (Math.PI * 2)) * Math.PI * 2;
+            }
+            // kat soluklaştırma
+            floorState.forEach((st, level) => {
+                const goal = fl === "all" || fl === level ? 1 : 0.1;
+                st.factor += (goal - st.factor) * 0.12;
+                st.mats.forEach(([m, base]) => { m.opacity = base * st.factor; });
+                st.labels.forEach((lb) => { lb.visible = fl === level && st.factor > 0.6; });
+            });
+            const heatNow = heatRef.current;
+            const showBars = barsRef.current;
+            roomMeshes.forEach((rm) => {
+                const goal = heatNow[rm.room.id] || 0;
+                rm.current += (goal - rm.current) * 0.08;
+                const v = rm.current;
+                const f = floorState[rm.room.level].factor;
+                if (v < 0.3)
+                    tmp.copy(cold).lerp(warm, v / 0.3);
+                else if (v < 0.65)
+                    tmp.copy(warm).lerp(hot, (v - 0.3) / 0.35);
+                else
+                    tmp.copy(hot).lerp(alarm, (v - 0.65) / 0.35);
+                rm.tileMat.color.copy(tmp);
+                rm.tileMat.opacity = (0.3 + v * 0.62) * f;
+                rm.bar.visible = showBars && v > 0.06 && f > 0.5;
+                if (rm.bar.visible) {
+                    rm.bar.scale.y = v * 2.1;
+                    rm.bar.position.y = rm.room.level * FLOOR_GAP + rm.bar.scale.y / 2;
+                    rm.barMat.color.copy(tmp);
+                    rm.barMat.opacity = 0.85 * f;
+                }
+            });
+            people.forEach((p) => {
+                const onShown = fl === "all" || p.level === fl || p.targetLevel === fl && p.path.length;
+                p.g.visible = !!onShown;
+                if (p.wait > 0) {
+                    p.wait -= dt;
+                    return;
+                }
+                if (!p.path.length) {
+                    planRoute(p);
+                    return;
+                }
+                const next = p.path[0];
+                const d = next.clone().sub(p.g.position);
+                const len = d.length();
+                if (len < 0.05) {
+                    p.path.shift();
+                    if (!p.path.length) {
+                        p.level = p.targetLevel;
+                        p.wait = 1.5 + Math.random() * 3;
+                    }
+                    return;
+                }
+                const vertical = Math.abs(d.y) > 0.01;
+                const step = Math.min(len, (vertical ? 1.3 : 1.1) * dt);
+                p.g.position.add(d.normalize().multiplyScalar(step));
+                if (!vertical)
+                    p.g.rotation.y = Math.atan2(d.x, d.z);
+            });
+            const pulse = (Math.sin(now / 380) + 1) / 2;
+            pulses.forEach((r) => {
+                const f = floorState[r.userData.level].factor;
+                r.scale.setScalar(1 + pulse * 1.5);
+                r.material.opacity = (0.9 - pulse * 0.8) * f;
+            });
+            if (spinRef.current) {
+                az += 0.0022;
+                azT = az;
+            }
+            az += (azT - az) * 0.1;
+            elev += (elevT - elev) * 0.1;
+            dist += (distT - dist) * 0.1;
+            lookY += (lookYT - lookY) * 0.1;
+            place();
+            renderer.render(scene, camera);
+        };
+        raf = requestAnimationFrame(tick);
+        const onResize = () => {
+            const w = el.clientWidth, h = el.clientHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        };
+        window.addEventListener("resize", onResize);
+        return () => {
+            cancelAnimationFrame(raf);
+            window.removeEventListener("resize", onResize);
+            window.removeEventListener("mousemove", move);
+            window.removeEventListener("mouseup", up);
+            scene.traverse((o) => {
+                if (o.geometry)
+                    o.geometry.dispose();
+                if (o.material)
+                    (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose());
+            });
+            labelTex.forEach((t) => t.dispose());
+            renderer.dispose();
+            if (renderer.domElement.parentNode === el)
+                el.removeChild(renderer.domElement);
+        };
+    }, [hero]);
+    if (hero)
+        return React.createElement("div", { className: "k-auth-bg", ref: mount });
+    const ranges = [["15dk", "15 dk"], ["1sa", "1 saat"], ["bugun", "Bugün"]];
+    const lift = [...FLOORS_RAW].reverse();
+    return (React.createElement("div", { className: "k-scene k-scene-tall", ref: mount },
+        React.createElement("div", { className: "k-lift", role: "group", "aria-label": "Kat se\u00E7" },
+            lift.map((f) => (React.createElement("button", { key: f.level, className: floor === f.level ? "on" : "", onClick: () => { setFloor(f.level); setPicked(null); }, "aria-label": f.name }, f.short))),
+            React.createElement("button", { className: `all ${floor === "all" ? "on" : ""}`, onClick: () => { setFloor("all"); setPicked(null); } }, "T\u00FCm\u00FC")),
+        React.createElement("div", { className: "k-scene-tools" },
+            React.createElement("button", { className: `k-mini ${view === "top" ? "on" : ""}`, onClick: () => { setView(view === "top" ? "3d" : "top"); setSpin(false); } }, view === "top" ? "3D" : "Üst"),
+            React.createElement("button", { className: `k-tool ${bars ? "on" : ""}`, onClick: () => setBars(!bars), "aria-label": "S\u00FCtunlar\u0131 g\u00F6ster/gizle", title: "S\u00FCtunlar" }, "\u25A5"),
+            React.createElement("button", { className: `k-tool ${spin ? "on" : ""}`, onClick: () => setSpin(!spin), "aria-label": "Otomatik d\u00F6nd\u00FCr", title: "D\u00F6nd\u00FCr" }, "\u21BB")),
+        picked ? (React.createElement("div", { className: `k-card ${picked.cam && picked.cam.status !== "online" ? "dead" : ""}` },
+            React.createElement("div", null,
+                React.createElement("div", { className: "k-card-name" }, picked.room.name),
+                React.createElement("div", { className: "k-card-meta" },
+                    picked.room.floor,
+                    " \u00B7 ",
+                    KIND_LABEL[picked.room.kind],
+                    " \u00B7",
+                    " ",
+                    !picked.cam ? "kamera yok"
+                        : picked.cam.status === "online" ? `${picked.cam.code} canlı`
+                            : `bağlantı yok · ${picked.cam.downSince}'ten beri`)),
+            React.createElement("div", { className: "k-card-num" },
+                picked.cam && picked.cam.status === "online" ? picked.events : "—",
+                React.createElement("small", null, range === "bugun" ? "bugün" : range === "1sa" ? "son 1 saat" : "son 15 dk")),
+            React.createElement("button", { className: "k-card-x", onClick: () => setPicked(null), "aria-label": "Kapat" }, "\u00D7"))) : (React.createElement("div", { className: "k-scene-bottom" }, ranges.map(([key, label]) => (React.createElement("button", { key: key, className: `k-mini ${range === key ? "on" : ""}`, onClick: () => setRange(key) }, label)))))));
+}
+/* ===================== kamera kaydı oynatıcı =====================
+   Demo: sahne canvas'a çiziliyor. Gerçekte:
+     klip     -> <video src={GET /events/{id}/clip .url}>
+     devamı   -> hls.js ile GET /events/{id}/playback .playlist_url,
+                 yüklenince video.currentTime = start_offset_sec
+   ================================================================= */
+function kf(rel, keys) {
+    if (rel <= keys[0][0])
+        return [keys[0][1], keys[0][2], false];
+    for (let i = 0; i < keys.length - 1; i++) {
+        const [t0, u0, d0] = keys[i], [t1, u1, d1] = keys[i + 1];
+        if (rel <= t1) {
+            const k = (rel - t0) / (t1 - t0 || 1);
+            return [u0 + (u1 - u0) * k, d0 + (d1 - d0) * k, Math.abs(u1 - u0) + Math.abs(d1 - d0) > 0.001];
+        }
+    }
+    const l = keys[keys.length - 1];
+    return [l[1], l[2], false];
+}
+const SCENES = {
+    fight: (rel) => {
+        const shake = rel > -1.5 && rel < 28 ? Math.sin(rel * 11) * 0.012 : 0;
+        const shove = rel > 3 && rel < 5.5 ? Math.sin(((rel - 3) / 2.5) * Math.PI) * 0.09 : 0;
+        const [au, ad, aw] = kf(rel, [[-10, 0.16, 0.3], [-2, 0.44, 0.56], [45, 0.44, 0.56], [62, 0.08, 0.26]]);
+        const [bu, bd, bw] = kf(rel, [[-10, 0.86, 0.78], [-2, 0.57, 0.6], [28, 0.57, 0.6], [44, 1.15, 0.92]]);
+        const [cu, cd, cw] = kf(rel, [[80, 1.15, 0.4], [104, 0.5, 0.46], [150, 0.5, 0.46], [170, 1.15, 0.4]]);
+        return {
+            figures: [
+                { u: au + shake, d: ad, walk: aw, id: "a", raise: rel > -1.5 && rel < 28 },
+                { u: bu - shake + shove, d: bd, walk: bw, id: "b", raise: rel > -1.5 && rel < 28 },
+                { u: cu, d: cd, walk: cw, id: "c", helmet: true },
+            ],
+            box: rel >= -1.5 && rel <= 28 ? ["a", "b"] : null,
+        };
+    },
+    carry: (rel) => {
+        const [au, ad, aw] = kf(rel, [[-60, 0.24, 0.22], [-8, 0.24, 0.22], [0, 0.56, 0.52], [9, 1.12, 0.84]]);
+        return { figures: [{ u: au, d: ad, walk: aw, id: "a", box: rel > -8 }], box: rel >= -4 && rel <= 7 ? ["a"] : null };
+    },
+    ppe: (rel) => {
+        const [au, ad, aw] = kf(rel, [[-10, 0.12, 0.62], [25, 0.86, 0.5]]);
+        const [bu, bd, bw] = kf(rel, [[-10, 0.46, 0.34], [5, 0.52, 0.4], [60, 0.52, 0.4], [75, 1.15, 0.55]]);
+        return {
+            figures: [
+                { u: au, d: ad, walk: aw, id: "a", helmet: true },
+                { u: bu, d: bd, walk: bw, id: "b" },
+            ],
+            box: rel >= -2 && rel <= 10 ? ["b"] : null,
+        };
+    },
+};
+function drawCctv(ctx, W, H, rel, ev, frame) {
+    const s = H / 300;
+    ctx.fillStyle = "#14181c";
+    ctx.fillRect(0, 0, W, H);
+    const bx0 = W * 0.2, bx1 = W * 0.8, by0 = H * 0.08, by1 = H * 0.47;
+    // yan duvarlar
+    ctx.fillStyle = "#1b2025";
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(bx0, by0);
+    ctx.lineTo(bx0, by1);
+    ctx.lineTo(0, H * 0.9);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(W, 0);
+    ctx.lineTo(bx1, by0);
+    ctx.lineTo(bx1, by1);
+    ctx.lineTo(W, H * 0.9);
+    ctx.fill();
+    // sağ duvardaki kapı
+    ctx.fillStyle = "#0c0f12";
+    ctx.beginPath();
+    ctx.moveTo(W * 0.86, H * 0.2);
+    ctx.lineTo(W * 0.95, H * 0.13);
+    ctx.lineTo(W * 0.95, H * 0.74);
+    ctx.lineTo(W * 0.86, H * 0.6);
+    ctx.fill();
+    // arka duvar + raflar
+    ctx.fillStyle = "#23292f";
+    ctx.fillRect(bx0, by0, bx1 - bx0, by1 - by0);
+    ctx.strokeStyle = "#3a434c";
+    ctx.lineWidth = 1.2 * s;
+    for (let r = 0; r < 3; r++) {
+        const rx = bx0 + (bx1 - bx0) * (0.06 + r * 0.32), rw = (bx1 - bx0) * 0.26;
+        ctx.strokeRect(rx, by0 + (by1 - by0) * 0.15, rw, (by1 - by0) * 0.8);
+        for (let l = 1; l < 3; l++) {
+            const ly = by0 + (by1 - by0) * (0.15 + l * 0.27);
+            ctx.beginPath();
+            ctx.moveTo(rx, ly);
+            ctx.lineTo(rx + rw, ly);
+            ctx.stroke();
+            ctx.fillStyle = (r + l) % 2 ? "#30373e" : "#2a3036";
+            ctx.fillRect(rx + rw * 0.08, ly - (by1 - by0) * 0.17, rw * 0.36, (by1 - by0) * 0.16);
+            ctx.fillRect(rx + rw * 0.54, ly - (by1 - by0) * 0.14, rw * 0.38, (by1 - by0) * 0.13);
+        }
+    }
+    // zemin
+    const fg = ctx.createLinearGradient(0, by1, 0, H);
+    fg.addColorStop(0, "#2a3035");
+    fg.addColorStop(1, "#3a4147");
+    ctx.fillStyle = fg;
+    ctx.beginPath();
+    ctx.moveTo(bx0, by1);
+    ctx.lineTo(bx1, by1);
+    ctx.lineTo(W, H * 0.9);
+    ctx.lineTo(W, H);
+    ctx.lineTo(0, H);
+    ctx.lineTo(0, H * 0.9);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.05)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 10; i++) {
+        const t = i / 10;
+        ctx.beginPath();
+        ctx.moveTo(bx0 + (bx1 - bx0) * t, by1);
+        ctx.lineTo(W * t, H);
+        ctx.stroke();
+    }
+    // yaya yolu şeridi (soluk sarı — CCTV'de renkler bastırık)
+    ctx.strokeStyle = "rgba(200,180,90,0.35)";
+    ctx.lineWidth = 3 * s;
+    ctx.beginPath();
+    ctx.moveTo(bx0 + (bx1 - bx0) * 0.3, by1);
+    ctx.lineTo(W * 0.18, H);
+    ctx.stroke();
+    const toScreen = (u, d) => {
+        const y = by1 + (H * 1.02 - by1) * d;
+        const left = bx0 * (1 - d) - W * 0.05 * d;
+        const right = bx1 + (W * 1.05 - bx1) * d;
+        return [left + (right - left) * u, y, (0.42 + d * 0.95) * s];
+    };
+    const scene = (SCENES[ev.scene] || (() => ({ figures: [], box: null })))(rel);
+    // arka planda ara sıra geçen biri — kaydın canlı hissettirmesi için
+    const phase = (((rel + 200) % 140) + 140) % 140;
+    if (phase < 18)
+        scene.figures.push({ u: -0.1 + (phase / 18) * 1.25, d: 0.72, walk: true, id: "p" });
+    const boxes = {};
+    [...scene.figures].sort((a, b) => a.d - b.d).forEach((f) => {
+        const [x, y, sc] = toScreen(f.u, f.d);
+        const h = 64 * sc;
+        const step = f.walk ? Math.sin(rel * 9 + f.u * 20) * 4 * sc : 0;
+        ctx.fillStyle = "rgba(0,0,0,0.3)";
+        ctx.beginPath();
+        ctx.ellipse(x, y, 12 * sc, 3.5 * sc, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#aab4bd";
+        ctx.fillRect(x - 5 * sc + step * 0.4, y - h * 0.42, 4 * sc, h * 0.42);
+        ctx.fillRect(x + 1 * sc - step * 0.4, y - h * 0.42, 4 * sc, h * 0.42);
+        ctx.fillStyle = "#8d98a2";
+        ctx.fillRect(x - 8 * sc, y - h * 0.83, 16 * sc, h * 0.43);
+        ctx.fillStyle = "#aab4bd";
+        if (f.raise) {
+            const swing = Math.sin(rel * 12 + (f.id === "a" ? 0 : 2)) * 6 * sc;
+            ctx.fillRect(x - 13 * sc, y - h * 0.86 + swing, 5 * sc, h * 0.28);
+            ctx.fillRect(x + 8 * sc, y - h * 0.86 - swing, 5 * sc, h * 0.28);
+        }
+        else {
+            ctx.fillRect(x - 11 * sc, y - h * 0.8, 3.5 * sc, h * 0.34);
+            ctx.fillRect(x + 7.5 * sc, y - h * 0.8, 3.5 * sc, h * 0.34);
+        }
+        ctx.beginPath();
+        ctx.arc(x, y - h * 0.93, 6.5 * sc, 0, Math.PI * 2);
+        ctx.fill();
+        if (f.helmet) {
+            ctx.fillStyle = "#c9ad4f";
+            ctx.beginPath();
+            ctx.arc(x, y - h * 0.95, 7.2 * sc, Math.PI, 0);
+            ctx.fill();
+        }
+        if (f.box) {
+            ctx.fillStyle = "#7d7262";
+            ctx.fillRect(x - 11 * sc, y - h * 0.74, 22 * sc, 15 * sc);
+        }
+        boxes[f.id] = [x - 15 * sc, y - h * 1.05, x + 15 * sc, y + 3 * sc];
+    });
+    // AI tespit kutusu
+    if (scene.box) {
+        const rs = scene.box.map((k) => boxes[k]).filter(Boolean);
+        if (rs.length) {
+            const x0 = Math.min(...rs.map((r) => r[0])) - 6 * s, y0 = Math.min(...rs.map((r) => r[1])) - 6 * s;
+            const x1 = Math.max(...rs.map((r) => r[2])) + 6 * s, y1 = Math.max(...rs.map((r) => r[3])) + 4 * s;
+            ctx.strokeStyle = "#E2A62E";
+            ctx.lineWidth = 2 * s;
+            ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+            const tag = `${ev.label} · %${ev.conf}`;
+            ctx.font = `600 ${11 * s}px ui-monospace, Menlo, monospace`;
+            const tw = ctx.measureText(tag).width + 10 * s;
+            ctx.fillStyle = "#E2A62E";
+            ctx.fillRect(x0, y0 - 16 * s, tw, 16 * s);
+            ctx.fillStyle = "#0F151B";
+            ctx.fillText(tag, x0 + 5 * s, y0 - 4.5 * s);
+        }
+    }
+    // görüntü gürültüsü + vinyet
+    for (let i = 0; i < 160; i++) {
+        ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.06})`;
+        ctx.fillRect(Math.random() * W, Math.random() * H, 1.5 * s, 1.5 * s);
+    }
+    const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, W * 0.7);
+    vg.addColorStop(0, "rgba(0,0,0,0)");
+    vg.addColorStop(1, "rgba(0,0,0,0.55)");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
+    // DVR ekran yazıları
+    const cam = CAMERAS.find((c) => c.name === ev.cam);
+    const when = new Date(new Date(`${EVENT_DATE}T${ev.t}`).getTime() + rel * 1000);
+    const p2 = (n) => String(n).padStart(2, "0");
+    const stamp = `${p2(when.getDate())}.${p2(when.getMonth() + 1)}.${when.getFullYear()} ${p2(when.getHours())}:${p2(when.getMinutes())}:${p2(when.getSeconds())}`;
+    ctx.font = `600 ${11.5 * s}px ui-monospace, Menlo, monospace`;
+    ctx.fillStyle = "rgba(230,235,239,0.9)";
+    ctx.fillText(`${cam ? cam.code : "CAM"} ${ev.cam.toUpperCase()}`, 10 * s, 18 * s);
+    const sw = ctx.measureText(stamp).width;
+    ctx.fillText(stamp, W - sw - 10 * s, 18 * s);
+    if (Math.floor(frame / 30) % 2 === 0) {
+        ctx.fillStyle = "#E0452F";
+        ctx.beginPath();
+        ctx.arc(14 * s, H - 14 * s, 4 * s, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.fillStyle = "rgba(230,235,239,0.85)";
+    ctx.fillText("REC", 22 * s, H - 10 * s);
+}
+const fmtClock = (ev, rel) => {
+    const d = new Date(new Date(`${EVENT_DATE}T${ev.t}`).getTime() + rel * 1000);
+    const p2 = (n) => String(n).padStart(2, "0");
+    return `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
+};
+function CctvPlayer({ ev, full = false, autoPlay = false, onMore, seek }) {
+    const wrap = useRef(null);
+    const canvas = useRef(null);
+    const range = full ? [-300, 3600] : [-10, 5];
+    const [rel, setRel] = useState(full ? 0 : -10);
+    const [playing, setPlaying] = useState(autoPlay);
+    const [speed, setSpeed] = useState(1);
+    const relRef = useRef(rel);
+    const frameRef = useRef(0);
+    const dragRef = useRef(false);
+    const draw = () => {
+        const c = canvas.current;
+        if (!c)
+            return;
+        drawCctv(c.getContext("2d"), c.width, c.height, relRef.current, ev, frameRef.current++);
+    };
+    const setPos = (v) => {
+        const clamped = Math.max(range[0], Math.min(range[1], v));
+        relRef.current = clamped;
+        setRel(clamped);
+        draw();
+    };
+    useEffect(() => {
+        const c = canvas.current;
+        const w = wrap.current.clientWidth || 340;
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        c.width = Math.round(w * dpr);
+        c.height = Math.round(((w * 9) / 16) * dpr);
+        draw();
+    }, []);
+    useEffect(() => {
+        if (seek) {
+            setPos(seek.rel);
+            setPlaying(true);
+        }
+    }, [seek]);
+    useEffect(() => {
+        if (!playing)
+            return;
+        if (relRef.current >= range[1])
+            setPos(range[0]);
+        let raf, last = performance.now(), lastUi = 0;
+        const loop = (now) => {
+            const dt = (now - last) / 1000;
+            last = now;
+            if (!dragRef.current)
+                relRef.current = Math.min(range[1], relRef.current + dt * speed);
+            draw();
+            if (now - lastUi > 120) {
+                setRel(relRef.current);
+                lastUi = now;
+            }
+            if (relRef.current >= range[1]) {
+                setRel(range[1]);
+                setPlaying(false);
+                return;
+            }
+            raf = requestAnimationFrame(loop);
+        };
+        raf = requestAnimationFrame(loop);
+        return () => cancelAnimationFrame(raf);
+    }, [playing, speed]);
+    const span = range[1] - range[0];
+    const pct = ((rel - range[0]) / span) * 100;
+    const marks = full ? FULL_MARKS[ev.id] || [[0, ev.label]] : [[0, ev.label]];
+    const trackAt = (e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        const x = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+        setPos(range[0] + (Math.max(0, Math.min(r.width, x)) / r.width) * span);
+    };
+    const ended = !full && rel >= range[1] && !playing;
+    return (React.createElement("div", { className: "k-player", ref: wrap },
+        React.createElement("div", { style: { position: "relative" } },
+            React.createElement("canvas", { ref: canvas, onClick: () => setPlaying(!playing), "aria-label": `${ev.cam} kamera kaydı` }),
+            !playing && !ended && (React.createElement("button", { className: "k-bigplay", onClick: () => setPlaying(true), "aria-label": "Oynat" }, "\u25B6")),
+            ended && (React.createElement("div", { className: "k-ended" },
+                React.createElement("button", { className: "k-pbtn", onClick: () => { setPos(range[0]); setPlaying(true); } }, "\u21BA Tekrar"),
+                onMore && React.createElement("button", { className: "k-pbtn hi", onClick: onMore }, "Devam\u0131n\u0131 izle \u2192")))),
+        React.createElement("div", { className: "k-pctl" },
+            React.createElement("button", { className: "k-pbtn", onClick: () => setPlaying(!playing), "aria-label": playing ? "Duraklat" : "Oynat" }, playing ? "❚❚" : "▶"),
+            full && React.createElement("button", { className: "k-pbtn", onClick: () => setPos(relRef.current - 10) }, "\u221210"),
+            React.createElement("div", { className: "k-track", onMouseDown: (e) => { dragRef.current = true; trackAt(e); }, onMouseMove: (e) => dragRef.current && trackAt(e), onMouseUp: () => { dragRef.current = false; }, onMouseLeave: () => { dragRef.current = false; }, onTouchStart: (e) => { dragRef.current = true; trackAt(e); }, onTouchMove: (e) => trackAt(e), onTouchEnd: () => { dragRef.current = false; } },
+                React.createElement("div", { className: "k-track-bar" }),
+                React.createElement("div", { className: "k-track-fill", style: { width: `${pct}%` } }),
+                marks.map(([m, label]) => (React.createElement("div", { key: m, className: "k-track-mark", title: label, style: { left: `${((m - range[0]) / span) * 100}%` } }))),
+                React.createElement("div", { className: "k-track-knob", style: { left: `${pct}%` } })),
+            full && React.createElement("button", { className: "k-pbtn", onClick: () => setPos(relRef.current + 10) }, "+10"),
+            full && (React.createElement("button", { className: "k-pbtn", onClick: () => setSpeed(speed === 1 ? 2 : speed === 2 ? 4 : 1) },
+                speed,
+                "\u00D7")),
+            React.createElement("span", { className: "k-ptime" }, full ? fmtClock(ev, rel) : `0:${String(Math.floor(rel - range[0])).padStart(2, "0")} / 0:15`)),
+        !full && onMore && !ended && (React.createElement("button", { className: "k-more", onClick: onMore },
+            "Devam\u0131n\u0131 izle \u2014 ",
+            fmtClock(ev, 0).slice(0, 5),
+            "'dan itibaren tam kay\u0131t \u2192"))));
+}
+/* ===================== ekranlar ===================== */
+function Live({ heat, events, siteIdx, setSiteIdx }) {
+    const online = CAMERAS.filter((c) => c.status === "online").length;
+    const alerts = events.filter((e) => e.sev >= 3).length;
+    const down = CAMERAS.filter((c) => c.status !== "online");
+    return (React.createElement(React.Fragment, null,
+        React.createElement("div", { className: "k-group", role: "tablist", "aria-label": "Tesisler" }, SITES.map((st, i) => (React.createElement("button", { key: st.name, role: "tab", "aria-selected": i === siteIdx, className: `${i === siteIdx ? "on" : ""} ${st.alerts ? "warn" : ""}`, onClick: () => setSiteIdx(i) },
+            React.createElement("b", null, st.alerts || st.cams - st.down),
+            st.alerts ? "uyarı" : "kamera",
+            React.createElement("span", { style: { fontSize: 10, opacity: .75 } }, st.name.split(" ")[0]))))),
+        React.createElement("div", { className: "k-strip" },
+            React.createElement("div", { className: "k-stat" },
+                React.createElement("b", null,
+                    online,
+                    "/",
+                    CAMERAS.length),
+                React.createElement("small", null, "kamera a\u00E7\u0131k")),
+            React.createElement("div", { className: "k-stat" },
+                React.createElement("b", null, events.length),
+                React.createElement("small", null, "bug\u00FCnk\u00FC olay")),
+            React.createElement("div", { className: `k-stat ${alerts ? "alarm" : ""}` },
+                React.createElement("b", null, alerts),
+                React.createElement("small", null, "uyar\u0131"))),
+        React.createElement("div", { className: "k-body" },
+            React.createElement("h2", { className: "k-h2" }, "Bina"),
+            React.createElement("p", { className: "k-sub" }, "3 kat, 21 oda. Soldan kat se\u00E7in, odaya dokunun."),
+            React.createElement("div", { className: "k-floor" },
+                React.createElement(Building3D, { heat: heat }),
+                React.createElement("div", { className: "k-legend" },
+                    React.createElement("span", null, "sakin"),
+                    React.createElement("span", { className: "k-ramp" }),
+                    React.createElement("span", null, "yo\u011Fun"))),
+            React.createElement("h2", { className: "k-h2", style: { marginTop: 26 } }, "Kameralar"),
+            React.createElement("p", { className: "k-sub" },
+                online,
+                " kamera ayn\u0131 anda izleniyor."),
+            down.map((c) => (React.createElement("div", { key: c.id, className: "k-cam error" },
+                React.createElement("div", null,
+                    React.createElement("div", { className: "k-cam-name" }, c.name),
+                    React.createElement("div", { className: "k-cam-meta" },
+                        c.zone,
+                        " \u00B7 ",
+                        c.code)),
+                React.createElement("div", { className: "k-cam-right" },
+                    React.createElement("span", { className: "k-dot error" }),
+                    React.createElement("span", { style: { color: "var(--alarm)" } },
+                        c.downSince,
+                        "'ten beri kapal\u0131"))))),
+            down.length > 0 && (React.createElement("p", { className: "k-sub", style: { marginTop: 8 } }, "Kapal\u0131 kameralar\u0131n oldu\u011Fu saatler raporlarda \"veri yok\" olarak ge\u00E7er.")),
+            FLOORS_RAW.map((f) => {
+                const cams = CAMERAS.filter((c) => c.level === f.level);
+                const on = cams.filter((c) => c.status === "online").length;
+                return (React.createElement("details", { key: f.level, className: "k-bld" },
+                    React.createElement("summary", null,
+                        React.createElement("span", { className: "k-bld-lv" }, f.short),
+                        React.createElement("span", null, f.name),
+                        React.createElement("span", { className: "k-conf" },
+                            on,
+                            "/",
+                            cams.length,
+                            " a\u00E7\u0131k")),
+                    cams.map((c) => (React.createElement("div", { key: c.id, className: "k-room" },
+                        React.createElement("span", { className: `k-dot ${c.status}` }),
+                        React.createElement("span", null, c.name),
+                        React.createElement("span", { className: "k-conf" }, c.code))))));
+            }))));
+}
+function ClipCard({ ev, onMore }) {
+    const [falseAlarm, setFalseAlarm] = useState(false);
+    const [pinned, setPinned] = useState(false);
+    return (React.createElement("div", { className: `k-clipcard s${ev.sev} ${falseAlarm ? "muted" : ""}` },
+        React.createElement("div", { className: "k-clip-head" },
+            React.createElement("span", { className: "k-clip-time" }, ev.t.slice(0, 5)),
+            React.createElement("span", { className: `k-tag s${ev.sev}` }, ev.sev >= 4 ? "Kritik" : "Uyarı"),
+            React.createElement("span", { className: "k-cam-meta", style: { marginLeft: "auto" } },
+                ev.cam,
+                " \u00B7 ",
+                ev.floor)),
+        React.createElement(CctvPlayer, { ev: ev, onMore: onMore }),
+        React.createElement("div", { className: "k-clip-body" }, ev.text),
+        React.createElement("div", { className: "k-clip-foot" },
+            React.createElement("button", { className: `k-pbtn ${falseAlarm ? "on" : ""}`, onClick: () => setFalseAlarm(!falseAlarm) }, falseAlarm ? "✓ Yanlış alarm olarak işaretlendi" : "Yanlış alarm"),
+            React.createElement("button", { className: `k-pbtn k-pin ${pinned ? "on" : ""}`, onClick: () => setPinned(!pinned) }, pinned ? "✓ Delil — süresiz saklanır" : "Delil olarak sakla")),
+        pinned && (React.createElement("div", { className: "k-clip-body", style: { paddingTop: 0 } },
+            React.createElement("span", { className: "k-keep-m" }, "Bu kay\u0131t otomatik silmeden muaf. Dosya kapand\u0131\u011F\u0131nda i\u015Fareti kald\u0131r\u0131n.")))));
+}
+function FullPlayback({ ev, onBack }) {
+    const [seek, setSeek] = useState(null);
+    const marks = FULL_MARKS[ev.id] || [[0, ev.label]];
+    return (React.createElement("div", { className: "k-body" },
+        React.createElement("button", { className: "k-clip", style: { marginBottom: 14 }, onClick: onBack }, "\u2190 Olaylar"),
+        React.createElement("h2", { className: "k-h2" },
+            ev.cam,
+            " \u00B7 tam kay\u0131t"),
+        React.createElement("p", { className: "k-sub" },
+            ev.floor,
+            " \u00B7 ",
+            ev.t.slice(0, 5),
+            " an\u0131ndan ba\u015Fl\u0131yor. Geri sar\u0131p \u00F6ncesine de bakabilirsiniz."),
+        React.createElement(CctvPlayer, { ev: ev, full: true, autoPlay: true, seek: seek }),
+        React.createElement("h2", { className: "k-h2", style: { marginTop: 22 } }, "Bu kay\u0131ttaki anlar"),
+        React.createElement("p", { className: "k-sub" }, "Dokundu\u011Funuzda o saniyeye atlar."),
+        marks.map(([rel, label]) => (React.createElement("button", { key: rel, className: "k-report", onClick: () => setSeek({ rel, n: Date.now() }) },
+            React.createElement("div", { className: "k-report-t" }, fmtClock(ev, rel)),
+            React.createElement("div", { className: "k-report-m" }, label)))),
+        React.createElement("p", { className: "k-sub", style: { marginTop: 16 } }, "Kay\u0131tlar paketinizde tan\u0131ml\u0131 s\u00FCre sonunda otomatik silinir. Ses kaydedilmez.")));
+}
+// Kapanan günler. Gerçekte GET /orgs/{id}/days — her gün ve PDF'i.
+const DAY_ARCHIVE = [
+    { day: "2026-10-02", label: "2 Ekim, Perşembe", events: 412, alerts: 3, pdf: "ready" },
+    { day: "2026-10-01", label: "1 Ekim, Çarşamba", events: 388, alerts: 1, pdf: "ready" },
+    { day: "2026-09-30", label: "30 Eylül, Salı", events: 441, alerts: 5, pdf: "ready" },
+    { day: "2026-09-29", label: "29 Eylül, Pazartesi", events: 356, alerts: 0, pdf: "ready" },
+    { day: "2026-09-28", label: "28 Eylül, Pazar", events: 94, alerts: 0, pdf: "ready" },
+];
+function DayArchive({ onBack }) {
+    return (React.createElement("div", { className: "k-body" },
+        React.createElement("button", { className: "k-clip", style: { marginBottom: 14 }, onClick: onBack }, "\u2190 Bug\u00FCn"),
+        React.createElement("h2", { className: "k-h2" }, "Ge\u00E7mi\u015F g\u00FCnler"),
+        React.createElement("p", { className: "k-sub" }, "Her kapanan g\u00FCn PDF olarak ar\u015Fivlenir. Olay kay\u0131tlar\u0131 silinmez, ekran yaln\u0131zca bug\u00FCn\u00FC g\u00F6sterir."),
+        DAY_ARCHIVE.map((d) => (React.createElement("div", { key: d.day, className: "k-day" },
+            React.createElement("div", { className: "k-day-l" },
+                React.createElement("div", { className: "k-day-t" }, d.label),
+                React.createElement("div", { className: "k-day-m" },
+                    d.events,
+                    " olay",
+                    d.alerts > 0 ? ` · ${d.alerts} uyarı` : " · uyarı yok")),
+            React.createElement("button", { className: "k-pbtn hi" }, "PDF indir")))),
+        React.createElement("p", { className: "k-sub", style: { marginTop: 14 } }, "PDF'ler raporlar\u0131n saklama s\u00FCresine tabi de\u011Fildir \u2014 silinmez.")));
+}
+function Events({ events }) {
+    const [full, setFull] = useState(null);
+    const [archive, setArchive] = useState(false);
+    if (full)
+        return React.createElement(FullPlayback, { ev: full, onBack: () => setFull(null) });
+    if (archive)
+        return React.createElement(DayArchive, { onBack: () => setArchive(false) });
+    const alerts = events.filter((e) => e.sev >= 3);
+    const rest = events.filter((e) => e.sev < 3);
+    return (React.createElement("div", { className: "k-body" },
+        React.createElement("div", { className: "k-dayhead" },
+            React.createElement("div", null,
+                React.createElement("div", { className: "k-day-t" }, "Bug\u00FCn \u00B7 3 Ekim"),
+                React.createElement("div", { className: "k-day-m" },
+                    events.length,
+                    " olay \u00B7 g\u00FCn 00:00'da d\u00F6ner")),
+            React.createElement("button", { className: "k-pbtn", onClick: () => setArchive(true) }, "Ge\u00E7mi\u015F g\u00FCnler")),
+        React.createElement("h2", { className: "k-h2" }, "S\u0131k\u0131nt\u0131l\u0131 anlar"),
+        React.createElement("p", { className: "k-sub" }, "Her kay\u0131t olaydan 10 saniye \u00F6nce ba\u015Flar."),
+        alerts.map((ev) => (React.createElement(ClipCard, { key: ev.id, ev: ev, onMore: () => setFull(ev) }))),
+        React.createElement("div", { className: "k-chain", style: { marginTop: 22 } },
+            React.createElement("div", { className: "k-sub", style: { margin: "0 0 6px" } }, "Katlar aras\u0131 hareket"),
+            React.createElement("div", { className: "k-chain-path" },
+                "Giri\u015F Hol\u00FC ",
+                React.createElement("em", null, "18:42"),
+                " \u2192 Merdiven ",
+                React.createElement("em", null, "18:43"),
+                " \u2192 1. Kat Raf C ",
+                React.createElement("em", null, "18:45"),
+                " \u2192 Giri\u015F Hol\u00FC ",
+                React.createElement("em", null, "18:51")),
+            React.createElement("div", { className: "k-cam-meta", style: { marginTop: 8 } }, "9 dakikal\u0131k tek hareket, iki kat. \u00C7\u0131k\u0131\u015Fta elde kutu g\u00F6r\u00FCld\u00FC, do\u011Frulanmas\u0131 gerekir.")),
+        React.createElement("h2", { className: "k-h2", style: { marginTop: 22 } }, "Di\u011Fer hareketler"),
+        rest.map((e) => (React.createElement("div", { className: "k-ev", key: e.id },
+            React.createElement("span", { className: `k-sev s${e.sev}` }),
+            React.createElement("span", { className: "k-ev-time" }, e.t.slice(0, 5)),
+            React.createElement("div", { className: "k-ev-body" },
+                React.createElement("div", null, e.text),
+                React.createElement("div", { className: "k-ev-cam" },
+                    e.cam,
+                    " \u00B7 ",
+                    e.floor)))))));
+}
+function Reports({ tasks, setTasks, open, setOpen, adding, setAdding }) {
+    if (adding) {
+        return (React.createElement(AddReport, { onCancel: () => setAdding(false), onSave: (t) => { setTasks([...tasks, t]); setAdding(false); } }));
+    }
+    if (open) {
+        return (React.createElement("div", { className: "k-body" },
+            React.createElement("button", { className: "k-clip", style: { marginBottom: 14 }, onClick: () => setOpen(null) }, "\u2190 Raporlar"),
+            React.createElement("div", { className: "k-doc" },
+                React.createElement("h1", null, "G\u00FCn Sonu Genel Raporu"),
+                React.createElement("div", { className: "k-meta" }, "2 Eyl\u00FCl 2026 \u00B7 18:00 \u2014 son 24 saat \u00B7 19 kamera \u00B7 3 kat"),
+                React.createElement("h2", null, "\u00D6zet"),
+                React.createElement("p", null, "G\u00FCn boyunca 412 olay kaydedildi. Yo\u011Funluk 09:00\u201311:00 ve 16:00\u201318:00 aras\u0131nda topland\u0131; en yo\u011Fun saat 10:00 (68 olay). \u00DC\u00E7 olay uyar\u0131 seviyesindeydi, kritik olay yok."),
+                React.createElement("h2", null, "\u00D6ne \u00E7\u0131kan olaylar"),
+                React.createElement("ul", null,
+                    React.createElement("li", null, "18:42\u201318:51 \u2014 Giri\u015Ften Raf Blo\u011Fu C'ye giden ve elinde kutuyla d\u00F6nen bir hareket zinciri. Stok kayd\u0131yla kar\u015F\u0131la\u015Ft\u0131r\u0131lmas\u0131 \u00F6neriliyor."),
+                    React.createElement("li", null, "17:20 \u2014 Y\u00FCkleme Rampas\u0131'nda baretsiz \u00E7al\u0131\u015Fan."),
+                    React.createElement("li", null, "11:34 \u2014 Ana Koridor'da forklift ile yaya ayn\u0131 anda dar alanda.")),
+                React.createElement("h2", null, "B\u00F6lge da\u011F\u0131l\u0131m\u0131"),
+                React.createElement("ul", null,
+                    React.createElement("li", null, "Ana Koridor \u2014 186 olay"),
+                    React.createElement("li", null, "Depo Giri\u015Fi \u2014 121 olay"),
+                    React.createElement("li", null, "Raf Blo\u011Fu C \u2014 74 olay"),
+                    React.createElement("li", null, "Y\u00FCkleme Rampas\u0131 \u2014 31 olay")),
+                React.createElement("h2", null, "Kamera kesintileri"),
+                React.createElement("p", null, "Y\u00FCkleme Rampas\u0131 20:04'ten rapor saatine kadar kapal\u0131yd\u0131. Bu aral\u0131kta o b\u00F6lge i\u00E7in veri yok \u2014 olay olmad\u0131\u011F\u0131 anlam\u0131na gelmez."),
+                React.createElement("h2", null, "\u00D6neriler"),
+                React.createElement("ul", null,
+                    React.createElement("li", null, "18:42\u201318:51 aras\u0131 kayd\u0131 stok say\u0131m\u0131yla birlikte inceleyin."),
+                    React.createElement("li", null, "Rampa kameras\u0131n\u0131n ba\u011Flant\u0131s\u0131n\u0131 kontrol edin."),
+                    React.createElement("li", null, "Koridorda forklift ve yaya i\u00E7in ayr\u0131 ge\u00E7i\u015F \u015Feridi d\u00FC\u015F\u00FCn\u00FCn.")))));
+    }
+    return (React.createElement("div", { className: "k-body" },
+        React.createElement("h2", { className: "k-h2" }, "G\u00F6revler"),
+        React.createElement("p", { className: "k-sub" }, "Yapay zekan\u0131n kendili\u011Finden haz\u0131rlad\u0131\u011F\u0131 raporlar."),
+        React.createElement("button", { className: "k-primary", style: { marginBottom: 12 }, onClick: () => setAdding(true) }, "Rapor ekle"),
+        tasks.map((t) => (React.createElement("div", { key: t.id, className: `k-task ${t.on ? "" : "k-task-off"}` },
+            React.createElement("span", { className: "k-clock" }, t.clock),
+            React.createElement("div", null,
+                React.createElement("div", { style: { fontWeight: 500 } }, t.title),
+                React.createElement("div", { className: "k-cam-meta" }, t.freq)),
+            React.createElement("button", { className: `k-switch ${t.on ? "on" : ""}`, "aria-label": `${t.title} ${t.on ? "açık" : "kapalı"}`, onClick: () => setTasks(tasks.map((x) => (x.id === t.id ? { ...x, on: !x.on } : x))) },
+                React.createElement("i", null))))),
+        React.createElement("h2", { className: "k-h2", style: { marginTop: 26 } }, "Haz\u0131r raporlar"),
+        React.createElement("p", { className: "k-sub" }, "\u0130stedi\u011Finiz zaman yeni rapor da ekleyebilirsiniz."),
+        REPORTS.map((r) => (React.createElement("button", { key: r.id, className: "k-report", onClick: () => setOpen(r.id) },
+            React.createElement("div", { className: "k-report-t" }, r.title),
+            React.createElement("div", { className: "k-report-m" },
+                r.when,
+                " \u00B7 ",
+                r.meta))))));
+}
+function Chat({ messages, onSend, onUpload, uploading }) {
+    const [text, setText] = useState("");
+    const fileRef = useRef(null);
+    const endRef = useRef(null);
+    useEffect(() => { var _a; (_a = endRef.current) === null || _a === void 0 ? void 0 : _a.scrollIntoView({ block: "end" }); }, [messages, uploading]);
+    const send = () => {
+        if (!text.trim())
+            return;
+        onSend(text.trim());
+        setText("");
+    };
+    const pick = (e) => {
+        var _a;
+        const file = (_a = e.target.files) === null || _a === void 0 ? void 0 : _a[0];
+        if (file)
+            onUpload(file);
+        e.target.value = "";
+    };
+    return (React.createElement("div", { className: "k-body" },
+        React.createElement("h2", { className: "k-h2" }, "Sohbet"),
+        React.createElement("p", { className: "k-sub" }, "Soru sorun ya da eski bir kayd\u0131 y\u00FCkleyin."),
+        messages.map((m, i) => (React.createElement("div", { key: i, className: `k-msg ${m.role}` },
+            m.text,
+            m.progress !== undefined && (React.createElement("div", { className: "k-progress" },
+                React.createElement("i", { style: { width: `${m.progress}%` } })))))),
+        React.createElement("div", { ref: endRef }),
+        React.createElement("input", { ref: fileRef, className: "k-upload", type: "file", accept: "video/mp4,video/quicktime,video/x-msvideo,video/*", onChange: pick }),
+        React.createElement("div", { className: "k-compose" },
+            React.createElement("button", { className: "k-clip", onClick: () => { var _a; return (_a = fileRef.current) === null || _a === void 0 ? void 0 : _a.click(); }, disabled: uploading, "aria-label": "Eski kay\u0131t y\u00FCkle", title: "Eski kay\u0131t y\u00FCkle" }, "\uFF0B"),
+            React.createElement("textarea", { className: "k-input", rows: 1, value: text, placeholder: uploading ? "Kayıt inceleniyor…" : "Dün gece kaç kişi girdi?", onChange: (e) => setText(e.target.value), onKeyDown: (e) => { if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    send();
+                } } }),
+            React.createElement("button", { className: "k-send", onClick: send, disabled: !text.trim() }, "G\u00F6nder"))));
+}
+function BuildingSetup() {
+    const [state, setState] = useState("applied"); // applied | thinking | proposal
+    const [answered, setAnswered] = useState(false);
+    const regenerate = () => {
+        setState("thinking");
+        setTimeout(() => setState("proposal"), 2600);
+    };
+    return (React.createElement(React.Fragment, null,
+        React.createElement("h2", { className: "k-h2" }, "Bina yap\u0131s\u0131"),
+        React.createElement("p", { className: "k-sub" }, "Kameralara bakarak yapay zeka \u00E7\u0131kard\u0131. Hatal\u0131 bir yer varsa d\u00FCzeltin."),
+        React.createElement("div", { className: "k-strip", style: { marginBottom: 12 } },
+            React.createElement("div", { className: "k-stat" },
+                React.createElement("b", null, "3"),
+                React.createElement("small", null, "kat")),
+            React.createElement("div", { className: "k-stat" },
+                React.createElement("b", null, "21"),
+                React.createElement("small", null, "oda")),
+            React.createElement("div", { className: "k-stat" },
+                React.createElement("b", null, CAMERAS.length),
+                React.createElement("small", null, "kamera"))),
+        !answered && (React.createElement("div", { className: "k-ask" },
+            React.createElement("p", null,
+                "2. Kat ",
+                React.createElement("b", null, "Ar\u015Fiv"),
+                " kameras\u0131ndan g\u00F6r\u00FCnt\u00FC alamad\u0131m, oday\u0131 sadece ad\u0131ndan tahmin ettim. Buras\u0131 ger\u00E7ekten ar\u015Fiv mi?"),
+            React.createElement("div", { style: { display: "flex", gap: 8 } },
+                React.createElement("button", { className: "k-pbtn hi", onClick: () => setAnswered(true) }, "Evet, do\u011Fru"),
+                React.createElement("button", { className: "k-pbtn", onClick: () => setAnswered(true) }, "D\u00FCzelt")))),
+        FLOORS_RAW.map((f) => (React.createElement("details", { key: f.level, className: "k-bld", open: f.level === 0 },
+            React.createElement("summary", null,
+                React.createElement("span", { className: "k-bld-lv" }, f.short),
+                React.createElement("span", null, f.name),
+                React.createElement("span", { className: "k-conf" }, "7 oda")),
+            ROOMS.filter((r) => r.level === f.level).map((r) => {
+                const cam = camOfRoom(r.id);
+                const low = r.confidence < 0.75;
+                return (React.createElement("div", { key: r.id, className: "k-room" },
+                    React.createElement("span", { className: `k-dot ${cam ? cam.status : ""}`, style: cam ? null : { background: "var(--line)" } }),
+                    React.createElement("div", null,
+                        React.createElement("div", null, r.name),
+                        React.createElement("div", { className: "k-cam-meta" },
+                            KIND_LABEL[r.kind],
+                            cam ? ` · ${cam.code}` : " · kamera yok")),
+                    React.createElement("span", { className: `k-conf ${low ? "low" : ""}` }, low ? "emin değilim" : `%${Math.round(r.confidence * 100)}`)));
+            })))),
+        React.createElement("h2", { className: "k-h2", style: { marginTop: 22, fontSize: 16 } }, "\u00D6\u011Frenilen ge\u00E7i\u015Fler"),
+        React.createElement("p", { className: "k-sub" }, "Ki\u015Filerin kameralar aras\u0131 hareketinden \u00E7\u0131kar\u0131ld\u0131."),
+        React.createElement("div", { className: "k-room", style: { background: "var(--panel)", border: "1px solid var(--line)" } },
+            React.createElement("span", null, "Giri\u015F Hol\u00FC \u2194 Merdiven"),
+            React.createElement("span", { className: "k-conf" }, "bu hafta 42 ge\u00E7i\u015F")),
+        React.createElement("div", { className: "k-room", style: { background: "var(--panel)", border: "1px solid var(--line)", borderTop: 0 } },
+            React.createElement("span", null, "Merdiven \u2194 1. Kat Raf C"),
+            React.createElement("span", { className: "k-conf" }, "17 ge\u00E7i\u015F \u00B7 yeni")),
+        React.createElement("div", { className: "k-room", style: { background: "var(--panel)", border: "1px solid var(--line)", borderTop: 0 } },
+            React.createElement("span", null, "Sevkiyat \u2194 Y\u00FCkleme Rampas\u0131"),
+            React.createElement("span", { className: "k-conf" }, "118 ge\u00E7i\u015F")),
+        React.createElement("div", { style: { marginTop: 16 } },
+            state === "applied" && (React.createElement("button", { className: "k-ghost", onClick: regenerate }, "Yapay zeka ile yeniden olu\u015Ftur")),
+            state === "thinking" && (React.createElement("div", { className: "k-ask" },
+                React.createElement("span", { className: "k-spin" }),
+                CAMERAS.length,
+                " kameraya bak\u0131yorum\u2026")),
+            state === "proposal" && (React.createElement("div", { className: "k-ask" },
+                React.createElement("p", null,
+                    "Yeni \u00F6neri haz\u0131r. Tek fark: 1. Kat ",
+                    React.createElement("b", null, "Koridor"),
+                    " asl\u0131nda raf ve palet g\u00F6r\u00FCn\u00FCyor,",
+                    React.createElement("b", null, " Ara Depo"),
+                    " olarak de\u011Fi\u015Ftirmeyi \u00F6neriyorum."),
+                React.createElement("div", { style: { display: "flex", gap: 8 } },
+                    React.createElement("button", { className: "k-pbtn hi", onClick: () => setState("applied") }, "Uygula"),
+                    React.createElement("button", { className: "k-pbtn", onClick: () => setState("applied") }, "Vazge\u00E7")))))));
+}
+function Meter({ label, value, max, unit = "" }) {
+    const pct = Math.min(100, (value / max) * 100);
+    return (React.createElement("div", null,
+        React.createElement("div", { className: "k-meter-row" },
+            React.createElement("span", null, label),
+            React.createElement("b", null,
+                value,
+                unit,
+                " / ",
+                max,
+                unit)),
+        React.createElement("div", { className: "k-bar" },
+            React.createElement("i", { className: pct >= 100 ? "alarm" : pct >= 80 ? "hi" : "", style: { width: `${pct}%` } }))));
+}
+function Billing({ sub, setSub }) {
+    const [view, setView] = useState("overview"); // overview | plans | profile | pay | processing | done | cancel
+    const [interval, setInterval_] = useState(sub.interval || "monthly");
+    const [choice, setChoice] = useState(null);
+    const [profile, setProfile] = useState({
+        company: "Mervan İnşaat Ltd. Şti.", contact: "Mervan", email: "demo@kestrion.com",
+        phone: "0555 111 22 33", taxNo: "", taxOffice: "", address: "", city: "İstanbul",
+    });
+    const [card, setCard] = useState({ owner: "", number: "", month: "", year: "", cvv: "" });
+    const camsUsed = CAMERAS.length;
+    const active = sub.status === "active";
+    const plan = PLANS.find((p) => p.key === sub.plan);
+    const price = (p) => (interval === "yearly" ? p.yearly : p.monthly);
+    const profileOk = profile.company && profile.contact && profile.email.includes("@") &&
+        profile.phone.replace(/\D/g, "").length >= 10 && profile.taxNo.length >= 10 && profile.address.length >= 5 && profile.city;
+    const cardOk = card.owner.length >= 3 && card.number.replace(/\D/g, "").length >= 15 &&
+        card.month && card.year && card.cvv.length >= 3;
+    const pickPlan = (p) => {
+        setChoice(p);
+        if (active) {
+            // aktif abonelikte plan değişikliği: yükseltme hemen, düşürme dönem sonunda
+            const up = p.monthly > plan.monthly;
+            setSub({ ...sub, plan: up ? p.key : sub.plan, pendingPlan: up ? null : p.key });
+            setView("overview");
+        }
+        else {
+            setView("profile");
+        }
+    };
+    const pay = () => {
+        setView("processing");
+        if (active) {
+            // kart güncelleme: yeni kart kaydedilir, sonraki çekimler ondan
+            setTimeout(() => {
+                setSub({ ...sub, card: card.number.replace(/\D/g, "").slice(-4) });
+                setCard({ owner: "", number: "", month: "", year: "", cvv: "" });
+                setView("overview");
+            }, 1600);
+            return;
+        }
+        setTimeout(() => {
+            const next = new Date();
+            next.setMonth(next.getMonth() + (interval === "yearly" ? 12 : 1));
+            setSub({
+                status: "active", plan: choice.key, interval, card: card.number.replace(/\D/g, "").slice(-4),
+                nextDate: next, cancelAt: false, pendingPlan: null,
+                invoices: [{ date: new Date(), amount: price(choice), status: "paid", label: `${choice.name} · ${interval === "yearly" ? "yıllık" : "aylık"}` }],
+            });
+            setView("done");
+        }, 2200);
+    };
+    const field = (key, label, props = {}) => (React.createElement("div", { className: "k-field" },
+        React.createElement("label", { className: "k-label", htmlFor: `bp-${key}` }, label),
+        React.createElement("input", { id: `bp-${key}`, className: "k-text", value: profile[key], onChange: (e) => setProfile({ ...profile, [key]: e.target.value }), ...props })));
+    /* ---------- ödeme sonrası ---------- */
+    if (view === "done") {
+        return (React.createElement("div", { className: "k-sub-card" },
+            React.createElement("div", { className: "k-sub-plan" }, "\u00D6deme al\u0131nd\u0131"),
+            React.createElement("p", { className: "k-sub-line" },
+                choice.name,
+                " plan\u0131 aktif. ",
+                tl(price(choice)),
+                " kart\u0131ndan \u00E7ekildi, faturan e-posta adresine gelecek. Sonraki \u00F6deme ",
+                fmtDate(sub.nextDate),
+                "."),
+            React.createElement("button", { className: "k-primary", style: { marginTop: 14 }, onClick: () => setView("overview") }, "Tamam")));
+    }
+    if (view === "processing") {
+        return (React.createElement("div", { className: "k-ask" },
+            React.createElement("span", { className: "k-spin" }),
+            "Bankanla 3D Secure do\u011Frulamas\u0131 yap\u0131l\u0131yor\u2026"));
+    }
+    /* ---------- kart ---------- */
+    if (view === "pay") {
+        const num = card.number.replace(/\D/g, "").slice(0, 16);
+        return (React.createElement(React.Fragment, null,
+            React.createElement("button", { className: "k-clip", style: { marginBottom: 14 }, onClick: () => setView(active ? "overview" : "profile") },
+                "\u2190 ",
+                active ? "Abonelik" : "Fatura bilgileri"),
+            React.createElement("h2", { className: "k-h2" }, active ? "Yeni kart" : "Kart bilgileri"),
+            React.createElement("div", { className: "k-secure" },
+                React.createElement("span", null, "\uD83D\uDD12"),
+                React.createElement("span", null,
+                    "Kart bilgileriniz do\u011Frudan ",
+                    BILLING_PROVIDER,
+                    "'ye gider, bizim sunucumuza u\u011Framaz ve bizde saklanmaz. 3D Secure ile do\u011Frulan\u0131r.")),
+            React.createElement("div", { className: "k-card-preview", "aria-hidden": "true" },
+                React.createElement("div", { className: "r" },
+                    React.createElement("span", null, "KESTRION"),
+                    React.createElement("span", null, choice.name)),
+                React.createElement("div", { className: "n" }, (num.padEnd(16, "•").match(/.{1,4}/g) || []).join(" ")),
+                React.createElement("div", { className: "r" },
+                    React.createElement("span", null, card.owner.toUpperCase() || "AD SOYAD"),
+                    React.createElement("span", null,
+                        (card.month || "AA").padStart(2, "0"),
+                        "/",
+                        card.year || "YY"))),
+            React.createElement("div", { className: "k-field" },
+                React.createElement("label", { className: "k-label", htmlFor: "cc-owner" }, "Kart \u00FCzerindeki isim"),
+                React.createElement("input", { id: "cc-owner", name: "cc_owner", className: "k-text", autoComplete: "cc-name", value: card.owner, onChange: (e) => setCard({ ...card, owner: e.target.value }) })),
+            React.createElement("div", { className: "k-field" },
+                React.createElement("label", { className: "k-label", htmlFor: "cc-num" }, "Kart numaras\u0131"),
+                React.createElement("input", { id: "cc-num", name: "card_number", className: "k-text", inputMode: "numeric", autoComplete: "cc-number", placeholder: "0000 0000 0000 0000", value: (num.match(/.{1,4}/g) || []).join(" "), onChange: (e) => setCard({ ...card, number: e.target.value }) })),
+            React.createElement("div", { className: "k-grid2" },
+                React.createElement("div", { className: "k-field" },
+                    React.createElement("label", { className: "k-label", htmlFor: "cc-exp" }, "Son kullanma"),
+                    React.createElement("div", { className: "k-times" },
+                        React.createElement("input", { id: "cc-exp", name: "expiry_month", className: "k-text", inputMode: "numeric", placeholder: "AA", maxLength: 2, autoComplete: "cc-exp-month", value: card.month, onChange: (e) => setCard({ ...card, month: e.target.value.replace(/\D/g, "") }) }),
+                        React.createElement("input", { name: "expiry_year", className: "k-text", inputMode: "numeric", placeholder: "YY", maxLength: 2, "aria-label": "Y\u0131l", autoComplete: "cc-exp-year", value: card.year, onChange: (e) => setCard({ ...card, year: e.target.value.replace(/\D/g, "") }) }))),
+                React.createElement("div", { className: "k-field" },
+                    React.createElement("label", { className: "k-label", htmlFor: "cc-cvv" }, "CVV"),
+                    React.createElement("input", { id: "cc-cvv", name: "cvv", className: "k-text", inputMode: "numeric", maxLength: 4, autoComplete: "cc-csc", value: card.cvv, onChange: (e) => setCard({ ...card, cvv: e.target.value.replace(/\D/g, "") }) }))),
+            !active && (React.createElement("div", { className: "k-total" },
+                React.createElement("span", null,
+                    choice.name,
+                    " \u00B7 ",
+                    interval === "yearly" ? "yıllık" : "aylık"),
+                React.createElement("b", null, tl(price(choice))))),
+            React.createElement("button", { className: "k-primary", disabled: !cardOk, onClick: pay }, active ? "Kartı kaydet" : "Öde ve aboneliği başlat"),
+            React.createElement("p", { className: "k-sub", style: { marginTop: 10 } },
+                "Her ",
+                interval === "yearly" ? "yıl" : "ay",
+                " otomatik yenilenir. \u0130stedi\u011Finiz zaman iptal edebilirsiniz; d\u00F6nem sonuna kadar kullan\u0131m s\u00FCrer.")));
+    }
+    /* ---------- fatura bilgileri ---------- */
+    if (view === "profile") {
+        return (React.createElement(React.Fragment, null,
+            React.createElement("button", { className: "k-clip", style: { marginBottom: 14 }, onClick: () => setView("plans") }, "\u2190 Planlar"),
+            React.createElement("h2", { className: "k-h2" }, "Fatura bilgileri"),
+            React.createElement("p", { className: "k-sub" }, "Faturan\u0131z bu bilgilerle kesilir. Bir kez girilir."),
+            field("company", "Firma adı"),
+            field("contact", "Yetkili adı soyadı"),
+            React.createElement("div", { className: "k-grid2" },
+                field("email", "E-posta", { type: "email", autoComplete: "email" }),
+                field("phone", "Telefon", { type: "tel", autoComplete: "tel" })),
+            React.createElement("div", { className: "k-grid2" },
+                field("taxNo", "VKN veya TCKN", { inputMode: "numeric" }),
+                field("taxOffice", "Vergi dairesi")),
+            field("address", "Adres", { autoComplete: "street-address" }),
+            field("city", "İl"),
+            React.createElement("button", { className: "k-primary", disabled: !profileOk, onClick: () => setView("pay") }, "Karta ge\u00E7")));
+    }
+    /* ---------- planlar ---------- */
+    if (view === "plans") {
+        return (React.createElement(React.Fragment, null,
+            React.createElement("button", { className: "k-clip", style: { marginBottom: 14 }, onClick: () => setView("overview") }, "\u2190 Abonelik"),
+            React.createElement("h2", { className: "k-h2" }, active ? "Plan değiştir" : "Plan seç"),
+            React.createElement("p", { className: "k-sub" }, "Her planda 3 kullan\u0131c\u0131, s\u0131n\u0131rs\u0131z rapor ve olay kay\u0131tlar\u0131 bulunur."),
+            !active && (React.createElement("div", { className: "k-toggle", role: "group", "aria-label": "\u00D6deme aral\u0131\u011F\u0131" },
+                React.createElement("button", { className: interval === "monthly" ? "on" : "", onClick: () => setInterval_("monthly") }, "Ayl\u0131k"),
+                React.createElement("button", { className: interval === "yearly" ? "on" : "", onClick: () => setInterval_("yearly") },
+                    "Y\u0131ll\u0131k",
+                    React.createElement("small", null, "2 ay bedava")))),
+            PLANS.map((p) => {
+                const tooSmall = camsUsed > p.cams;
+                const current = active && p.key === sub.plan;
+                return (React.createElement("div", { key: p.key, className: `k-plan ${current ? "cur" : ""} ${tooSmall ? "off" : ""}` },
+                    React.createElement("div", { className: "k-plan-top" },
+                        React.createElement("span", { className: "k-plan-name" }, p.name),
+                        React.createElement("span", { className: "k-plan-price" },
+                            tl(interval === "yearly" ? Math.round(p.yearly / 12) : p.monthly),
+                            React.createElement("small", null, " / ay"))),
+                    React.createElement("ul", null,
+                        React.createElement("li", null,
+                            p.cams,
+                            " kameraya kadar"),
+                        React.createElement("li", null,
+                            "Kay\u0131tlar ",
+                            p.days,
+                            " g\u00FCn saklan\u0131r"),
+                        React.createElement("li", null, p.key === "starter" ? "Günlük rapor + 2 özel rapor" : "Sınırsız özel rapor")),
+                    tooSmall && React.createElement("p", { className: "k-plan-why" },
+                        camsUsed,
+                        " kameran var, bu plan ",
+                        p.cams,
+                        " destekliyor."),
+                    React.createElement("button", { className: current ? "k-ghost" : "k-primary", disabled: tooSmall || current, onClick: () => pickPlan(p) }, current ? "Mevcut plan" : active ? (p.monthly > plan.monthly ? "Hemen yükselt" : "Dönem sonunda geç") : `${p.name} seç`)));
+            }),
+            interval === "yearly" && !active && (React.createElement("p", { className: "k-sub" },
+                "Y\u0131ll\u0131k planlar tek seferde \u00E7ekilir: ",
+                PLANS.map((p) => `${p.name} ${tl(p.yearly)}`).join(" · ")))));
+    }
+    /* ---------- iptal onayı ---------- */
+    if (view === "cancel") {
+        return (React.createElement("div", { className: "k-sub-card alarm" },
+            React.createElement("div", { className: "k-sub-plan", style: { fontSize: 22 } }, "Aboneli\u011Fi iptal et"),
+            React.createElement("p", { className: "k-sub-line" },
+                fmtDate(sub.nextDate),
+                " tarihine kadar her \u015Fey \u00E7al\u0131\u015Fmaya devam eder. O g\u00FCn kameralar\u0131n izlenmesi durur, kay\u0131tlar saklama s\u00FCresi dolunca silinir. Raporlar\u0131n ve bina yap\u0131n kal\u0131r; geri d\u00F6nd\u00FC\u011F\u00FCnde her \u015Fey yerinde olur."),
+            React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 14 } },
+                React.createElement("button", { className: "k-ghost", onClick: () => setView("overview") }, "Vazge\u00E7"),
+                React.createElement("button", { className: "k-ghost k-danger", style: { borderColor: "var(--alarm)" }, onClick: () => { setSub({ ...sub, cancelAt: true }); setView("overview"); } }, "\u0130ptal et"))));
+    }
+    /* ---------- genel bakış ---------- */
+    const trial = sub.status === "trialing";
+    return (React.createElement(React.Fragment, null,
+        React.createElement("div", { className: `k-sub-card ${trial && sub.trialDaysLeft <= 3 ? "alarm" : ""}` },
+            React.createElement("div", { className: "k-sub-top" },
+                React.createElement("span", { className: "k-sub-plan" }, plan.name),
+                React.createElement("span", { className: `k-tag ${trial ? "s3" : ""}`, style: !trial ? { color: "var(--ok)", borderColor: "var(--ok)" } : null }, trial ? "Deneme" : sub.cancelAt ? "İptal edildi" : "Aktif")),
+            React.createElement("div", { className: "k-sub-line" },
+                trial && React.createElement(React.Fragment, null,
+                    "Deneme s\u00FCrenin bitmesine ",
+                    React.createElement("b", { style: { color: "var(--paper)" } },
+                        sub.trialDaysLeft,
+                        " g\u00FCn"),
+                    " var. Kart gerekmedi. S\u00FCre sonunda izleme durur."),
+                active && !sub.cancelAt && React.createElement(React.Fragment, null,
+                    sub.interval === "yearly" ? "Yıllık" : "Aylık",
+                    " \u00B7 sonraki \u00F6deme ",
+                    fmtDate(sub.nextDate),
+                    " \u00B7 ",
+                    tl(sub.interval === "yearly" ? plan.yearly : plan.monthly),
+                    " \u00B7 kart \u2022\u2022\u2022\u2022 ",
+                    sub.card),
+                active && sub.cancelAt && React.createElement(React.Fragment, null,
+                    fmtDate(sub.nextDate),
+                    " tarihine kadar kullanabilirsin, sonra yenilenmez.")),
+            sub.pendingPlan && (React.createElement("div", { className: "k-sub-line", style: { color: "var(--hi)" } },
+                fmtDate(sub.nextDate),
+                " tarihinde ",
+                PLANS.find((p) => p.key === sub.pendingPlan).name,
+                " plan\u0131na ge\u00E7ilecek.")),
+            React.createElement("div", { className: "k-meters" },
+                React.createElement(Meter, { label: "Kamera", value: camsUsed, max: plan.cams }),
+                React.createElement(Meter, { label: "Kullan\u0131c\u0131", value: TEAM.length, max: MAX_USERS }),
+                React.createElement(Meter, { label: "Kay\u0131t saklama", value: plan.days, max: plan.days, unit: " g\u00FCn" })),
+            React.createElement("button", { className: "k-primary", style: { marginTop: 16 }, onClick: () => setView("plans") }, trial ? "Plan seç ve devam et" : "Plan değiştir"),
+            camsUsed >= plan.cams * 0.9 && !trial && (React.createElement("p", { className: "k-sub", style: { margin: "8px 0 0", color: "var(--hi)" } }, "Kamera limitine yakla\u015F\u0131ld\u0131. Yeni kamera i\u00E7in plan y\u00FCkseltmesi gerekir."))),
+        active && (React.createElement(React.Fragment, null,
+            React.createElement("h2", { className: "k-h2" }, "Faturalar"),
+            React.createElement("p", { className: "k-sub" }, "E-faturalar ayr\u0131ca e-postana g\u00F6nderilir."),
+            (sub.invoices || []).map((inv, i) => (React.createElement("div", { key: i, className: "k-inv" },
+                React.createElement("span", { className: "k-dot online" }),
+                React.createElement("div", null,
+                    React.createElement("div", null, inv.label),
+                    React.createElement("div", { className: "k-cam-meta" }, fmtDate(inv.date))),
+                React.createElement("span", { className: "k-conf" },
+                    tl(inv.amount),
+                    " \u00B7 \u00F6dendi")))),
+            React.createElement("div", { style: { display: "flex", gap: 16, marginTop: 10, flexWrap: "wrap" } },
+                React.createElement("button", { className: "k-link", onClick: () => { setChoice(plan); setInterval_(sub.interval); setView("pay"); } }, "Kart\u0131 g\u00FCncelle"),
+                !sub.cancelAt ? (React.createElement("button", { className: "k-link k-danger", onClick: () => setView("cancel") }, "Aboneli\u011Fi iptal et")) : (React.createElement("button", { className: "k-link", onClick: () => setSub({ ...sub, cancelAt: false }) }, "\u0130ptali geri al")))))));
+}
+function Account({ sub, setSub, section, setSection }) {
+    const tabs = [["billing", "Abonelik"], ["team", "Ekip"], ["data", "Veri"], ["building", "Bina"]];
+    return (React.createElement("div", { className: "k-body" },
+        React.createElement("div", { className: "k-seg", role: "tablist" }, tabs.map(([k, l]) => (React.createElement("button", { key: k, role: "tab", "aria-selected": section === k, className: section === k ? "on" : "", onClick: () => setSection(k) }, l)))),
+        section === "billing" && React.createElement(Billing, { sub: sub, setSub: setSub }),
+        section === "team" && React.createElement(TeamList, null),
+        section === "data" && React.createElement(Retention, { sub: sub }),
+        section === "building" && React.createElement(BuildingSetup, null)));
+}
+// Üç katman, üç ayrı süre: ham kayıt pahalı ve hassas, olay satırı
+// görselsiz metin. Hepsini aynı süre tutmak ya diski ya da raporun
+// karşılaştırma gücünü yakar.
+const KEEP = {
+    starter: { rec: 7, clip: 30, ev: 180 },
+    pro: { rec: 14, clip: 90, ev: 365 },
+    enterprise: { rec: 30, clip: 180, ev: 730 },
+};
+function Retention({ sub }) {
+    const k = KEEP[sub === null || sub === void 0 ? void 0 : sub.plan] || KEEP.pro;
+    const months = (d) => (d >= 365 ? `${Math.round(d / 365)} yıl` : `${Math.round(d / 30)} ay`);
+    return (React.createElement(React.Fragment, null,
+        React.createElement("h2", { className: "k-h2" }, "Verileriniz ne kadar kal\u0131yor"),
+        React.createElement("p", { className: "k-sub" }, "S\u00FCreler paketinize g\u00F6re. S\u00FCre dolan veri gece otomatik silinir."),
+        React.createElement("div", { className: "k-keep" },
+            React.createElement("div", { className: "k-keep-row" },
+                React.createElement("span", { className: "k-keep-d" },
+                    k.rec,
+                    " g\u00FCn"),
+                React.createElement("div", null,
+                    React.createElement("div", { className: "k-keep-t" }, "Kesintisiz kamera kayd\u0131"),
+                    React.createElement("div", { className: "k-keep-m" }, "Her kameran\u0131n tam kayd\u0131. \"Devam\u0131n\u0131 izle\" bu s\u00FCre i\u00E7inde \u00E7al\u0131\u015F\u0131r. En \u00E7ok yer tutan katman \u2014 kamera ba\u015F\u0131na g\u00FCnde 5-40 GB."))),
+            React.createElement("div", { className: "k-keep-row" },
+                React.createElement("span", { className: "k-keep-d" },
+                    k.clip,
+                    " g\u00FCn"),
+                React.createElement("div", null,
+                    React.createElement("div", { className: "k-keep-t" }, "Olay klipleri ve kareleri"),
+                    React.createElement("div", { className: "k-keep-m" }, "Yapay zek\u00E2n\u0131n i\u015Faretledi\u011Fi anlar\u0131n 15 saniyelik kesitleri. Tam kay\u0131t silindikten sonra da elde kal\u0131r \u2014 raporun kan\u0131t\u0131 bunlar."))),
+            React.createElement("div", { className: "k-keep-row" },
+                React.createElement("span", { className: "k-keep-d" }, months(k.ev)),
+                React.createElement("div", null,
+                    React.createElement("div", { className: "k-keep-t" }, "Olay kay\u0131tlar\u0131 (g\u00F6r\u00FCnt\u00FCs\u00FCz)"),
+                    React.createElement("div", { className: "k-keep-m" }, "Saat, kamera, kategori ve tek c\u00FCmle \u00F6zet. G\u00F6r\u00FCnt\u00FC yok, ki\u015Fi tan\u0131mlanamaz. Ge\u00E7en y\u0131l\u0131n ayn\u0131 ay\u0131yla kar\u015F\u0131la\u015Ft\u0131rma bu veriden \u00E7\u0131kar."))),
+            React.createElement("div", { className: "k-keep-row" },
+                React.createElement("span", { className: "k-keep-d" }, "S\u00FCresiz"),
+                React.createElement("div", null,
+                    React.createElement("div", { className: "k-keep-t" }, "Raporlar ve delil i\u015Faretli olaylar"),
+                    React.createElement("div", { className: "k-keep-m" }, "\u00DCretilmi\u015F raporlar silinmez. Bir olaya \"Delil olarak sakla\" derseniz klibi de s\u00FCresiz kal\u0131r \u2014 dava veya sigorta dosyas\u0131 s\u00FCreyi a\u015Fabilir.")))),
+        React.createElement("h2", { className: "k-h2", style: { marginTop: 26 } }, "Silme kayd\u0131"),
+        React.createElement("p", { className: "k-sub" }, "KVKK denetiminde istenen kan\u0131t. De\u011Fi\u015Ftirilemez."),
+        React.createElement("div", { className: "k-audit" },
+            React.createElement("div", { className: "k-audit-row" },
+                React.createElement("time", null, "01:20"),
+                React.createElement("span", null, "412 kare + 38 klip silindi"),
+                React.createElement("span", null, "bug\u00FCn")),
+            React.createElement("div", { className: "k-audit-row" },
+                React.createElement("time", null, "01:20"),
+                React.createElement("span", null, "389 kare + 31 klip silindi"),
+                React.createElement("span", null, "d\u00FCn")),
+            React.createElement("div", { className: "k-audit-row" },
+                React.createElement("time", null, "01:20"),
+                React.createElement("span", null, "1.204 olay kayd\u0131 silindi (s\u00FCre doldu)"),
+                React.createElement("span", null, "3 g\u00FCn \u00F6nce"))),
+        React.createElement("p", { className: "k-sub", style: { marginTop: 14 } }, "Ses hi\u00E7bir katmanda kaydedilmez. Ki\u015Fi bazl\u0131 performans takibi yap\u0131lmaz. Daha uzun s\u00FCre gerekiyorsa paketinizi y\u00FCkseltebilir veya kurumsal s\u00F6zle\u015Fmeyle \u00F6zel s\u00FCre tan\u0131mlayabilirsiniz.")));
+}
+function TeamList() {
+    const empty = MAX_USERS - TEAM.length;
+    return (React.createElement(React.Fragment, null,
+        React.createElement("h2", { className: "k-h2" }, "Mervan \u0130n\u015Faat"),
+        React.createElement("p", { className: "k-sub" },
+            TEAM.length,
+            " / ",
+            MAX_USERS,
+            " kullan\u0131c\u0131"),
+        TEAM.map((u) => (React.createElement("div", { key: u.name, className: "k-slot" },
+            React.createElement("span", { className: "k-av" }, u.name[0]),
+            React.createElement("div", null, u.name),
+            React.createElement("span", { className: "k-role" }, u.role)))),
+        Array.from({ length: empty }).map((_, i) => (React.createElement("button", { key: i, className: "k-slot empty" }, "Kullan\u0131c\u0131 ekle"))),
+        React.createElement("p", { className: "k-sub", style: { marginTop: 14 } }, empty > 0 ? `${empty} boş yer var.` : "Yer kalmadı. Yeni kullanıcı için önce birini çıkarın."),
+        React.createElement("h2", { className: "k-h2", style: { marginTop: 26 } }, "Kay\u0131t izi"),
+        React.createElement("p", { className: "k-sub" }, "Kimin hangi kayd\u0131 ne zaman izledi\u011Fi tutulur."),
+        React.createElement("div", { className: "k-audit" },
+            React.createElement("div", { className: "k-audit-row" },
+                React.createElement("time", null, "14:06"),
+                React.createElement("span", null, "Mervan \u00B7 11:10 arbede kayd\u0131"),
+                React.createElement("span", null, "\u00C7erkezk\u00F6y")),
+            React.createElement("div", { className: "k-audit-row" },
+                React.createElement("time", null, "11:58"),
+                React.createElement("span", null, "Ahmet \u00B7 g\u00FCn sonu raporu indirildi"),
+                React.createElement("span", null, "\u00C7erkezk\u00F6y")),
+            React.createElement("div", { className: "k-audit-row" },
+                React.createElement("time", null, "09:12"),
+                React.createElement("span", null, "Mervan \u00B7 rampa kameras\u0131 ayar\u0131 de\u011Fi\u015Fti"),
+                React.createElement("span", null, "Adana"))),
+        React.createElement("p", { className: "k-sub", style: { marginTop: 10 } }, "Kay\u0131t izi 12 ay saklan\u0131r ve silinemez.")));
+}
+function Login({ heat, onIn }) {
+    const [mode, setMode] = useState("in"); // in | up
+    const [email, setEmail] = useState("demo@kestrion.com");
+    const [pass, setPass] = useState("Kestrion2026");
+    const [company, setCompany] = useState("");
+    const ready = mode === "in"
+        ? email.includes("@") && pass.length >= 6
+        : email.includes("@") && pass.length >= 6 && company.trim().length >= 2;
+    return (React.createElement("div", { className: "k-auth" },
+        React.createElement(Building3D, { heat: heat, hero: true }),
+        React.createElement("div", { className: "k-auth-veil" }),
+        React.createElement("div", { className: "k-auth-in" },
+            React.createElement("h1", null,
+                "KESTRI",
+                React.createElement("span", null, "O"),
+                "N"),
+            React.createElement("p", { className: "k-auth-line" }, "Kameralar\u0131n\u0131z\u0131 ba\u011Flay\u0131n. \u0130zleme ve g\u00FCn sonu raporu otomatik y\u00FCr\u00FCr."),
+            React.createElement("div", { className: "k-auth-rule" }),
+            mode === "up" && (React.createElement("div", { className: "k-field" },
+                React.createElement("label", { className: "k-label", htmlFor: "k-co" }, "\u0130\u015Fletme ad\u0131"),
+                React.createElement("input", { id: "k-co", className: "k-text", value: company, placeholder: "Mervan \u0130n\u015Faat", onChange: (e) => setCompany(e.target.value) }))),
+            React.createElement("div", { className: "k-field" },
+                React.createElement("label", { className: "k-label", htmlFor: "k-em" }, "E-posta"),
+                React.createElement("input", { id: "k-em", className: "k-text", type: "email", value: email, placeholder: "ad@sirket.com", autoComplete: "email", onChange: (e) => setEmail(e.target.value) })),
+            React.createElement("div", { className: "k-field" },
+                React.createElement("label", { className: "k-label", htmlFor: "k-pw" }, "Parola"),
+                React.createElement("input", { id: "k-pw", className: "k-text", type: "password", value: pass, placeholder: "En az 6 karakter", autoComplete: "current-password", onChange: (e) => setPass(e.target.value) })),
+            React.createElement("button", { className: "k-primary", disabled: !ready, onClick: () => onIn(mode === "up") }, mode === "in" ? "Giriş yap" : "Hesap oluştur"),
+            React.createElement("p", { className: "k-sub", style: { marginTop: 12, textAlign: "center" } }, "Demo hesab\u0131 \u00B7 demo@kestrion.com"),
+            React.createElement("button", { className: "k-alt", onClick: () => setMode(mode === "in" ? "up" : "in") }, mode === "in"
+                ? React.createElement(React.Fragment, null,
+                    "Hesab\u0131n\u0131z yok mu? ",
+                    React.createElement("b", null, "Yeni hesap a\u00E7"))
+                : React.createElement(React.Fragment, null,
+                    "Hesab\u0131n\u0131z var m\u0131? ",
+                    React.createElement("b", null, "Giri\u015F yap"))))));
+}
+function Onboarding({ onDone }) {
+    var _a;
+    const [step, setStep] = useState(1);
+    const [sector, setSector] = useState("");
+    const [desc, setDesc] = useState("");
+    const [start, setStart] = useState("08:00");
+    const [end, setEnd] = useState("18:00");
+    const [days, setDays] = useState([0, 1, 2, 3, 4, 5]);
+    const [rules, setRules] = useState([]);
+    const [prios, setPrios] = useState([]);
+    const toggle = (list, set, val) => set(list.includes(val) ? list.filter((x) => x !== val) : [...list, val]);
+    const preview = `İŞLETME: Mervan İnşaat\n` +
+        (sector ? `Sektör: ${(_a = SECTORS.find((x) => x[0] === sector)) === null || _a === void 0 ? void 0 : _a[1]}\n` : "") +
+        (desc ? `İşletme tanımı: ${desc.trim()}\n` : "") +
+        `Mesai: ${days.map((d) => DAYS[d]).join(", ") || "belirtilmedi"} ${start}-${end}\n` +
+        `Bu saatlerin dışındaki hareketler olağandışı sayılır.\n` +
+        (rules.length ? `Zorunlu kurallar: ${rules.join(", ")}\n` : "") +
+        (prios.length ? `Öncelikli takip: ${prios.join(", ")}` : "");
+    const canNext = step === 1 ? !!sector : step === 2 ? desc.trim().length >= 20 : true;
+    return (React.createElement("div", { className: "k-body" },
+        React.createElement("p", { className: "k-steps" },
+            "Kurulum \u00B7 ",
+            step,
+            " / 3"),
+        step === 1 && (React.createElement(React.Fragment, null,
+            React.createElement("h2", { className: "k-h2" }, "Ne i\u015F yap\u0131yorsunuz?"),
+            React.createElement("p", { className: "k-sub" }, "Sekt\u00F6re g\u00F6re neyin normal, neyin sorun oldu\u011Funu ay\u0131rt ediyorum."),
+            React.createElement("div", { className: "k-chips" }, SECTORS.map(([key, label]) => (React.createElement("button", { key: key, className: `k-chip ${sector === key ? "on" : ""}`, onClick: () => setSector(key) }, label)))))),
+        step === 2 && (React.createElement(React.Fragment, null,
+            React.createElement("h2", { className: "k-h2" }, "Sahay\u0131 anlat"),
+            React.createElement("p", { className: "k-sub" }, "Ne depolan\u0131yor, kimler girip \u00E7\u0131k\u0131yor, nerede dikkat edilmesi gerekiyor."),
+            React.createElement("textarea", { className: "k-text", rows: 7, value: desc, onChange: (e) => setDesc(e.target.value), placeholder: "Kapal\u0131 in\u015Faat malzemesi deposu. Demir, \u00E7imento ve kal\u0131p malzemesi tutuluyor. Sabah \u015Fof\u00F6rler y\u00FCkleme yap\u0131yor, g\u00FCnd\u00FCz 4-5 ki\u015Fi \u00E7al\u0131\u015F\u0131yor. Rampada forklift var, orada yaya olmamal\u0131." }),
+            desc.length > 0 && desc.trim().length < 20 && (React.createElement("p", { className: "k-hint" }, "Birka\u00E7 c\u00FCmle daha yaz\u0131n; ne kadar anlat\u0131rsan\u0131z o kadar isabetli olur.")))),
+        step === 3 && (React.createElement(React.Fragment, null,
+            React.createElement("h2", { className: "k-h2" }, "Mesai ve kurallar"),
+            React.createElement("p", { className: "k-sub" }, "Mesai d\u0131\u015F\u0131 hareketler ayr\u0131ca i\u015Faretlenir."),
+            React.createElement("div", { className: "k-field" },
+                React.createElement("div", { className: "k-times" },
+                    React.createElement("input", { className: "k-text", type: "time", value: start, onChange: (e) => setStart(e.target.value) }),
+                    React.createElement("span", { style: { color: "var(--steel)" } }, "\u2014"),
+                    React.createElement("input", { className: "k-text", type: "time", value: end, onChange: (e) => setEnd(e.target.value) })),
+                React.createElement("div", { className: "k-chips", style: { marginTop: 8 } }, DAYS.map((d, i) => (React.createElement("button", { key: d, className: `k-chip ${days.includes(i) ? "on" : ""}`, onClick: () => toggle(days, setDays, i) }, d))))),
+            React.createElement("div", { className: "k-field" },
+                React.createElement("label", { className: "k-label" }, "Zorunlu g\u00FCvenlik kurallar\u0131"),
+                React.createElement("div", { className: "k-chips" }, SAFETY_RULES.map((r) => (React.createElement("button", { key: r, className: `k-chip ${rules.includes(r) ? "on" : ""}`, onClick: () => toggle(rules, setRules, r) }, r))))),
+            React.createElement("div", { className: "k-field" },
+                React.createElement("label", { className: "k-label" }, "En \u00E7ok neyi takip edeyim?"),
+                React.createElement("div", { className: "k-chips" }, PRIORITIES.map((p) => (React.createElement("button", { key: p, className: `k-chip ${prios.includes(p) ? "on" : ""}`, onClick: () => toggle(prios, setPrios, p) }, p))))),
+            React.createElement("div", { className: "k-field" },
+                React.createElement("label", { className: "k-label" }, "Kameralara bakarken akl\u0131mda tutacaklar\u0131m"),
+                React.createElement("div", { className: "k-preview" }, preview)))),
+        React.createElement("div", { style: { marginTop: 24 } },
+            React.createElement("button", { className: "k-primary", disabled: !canNext, onClick: () => (step === 3 ? onDone() : setStep(step + 1)) }, step === 3 ? "Kaydet ve izlemeyi başlat" : "Devam"),
+            step > 1 && (React.createElement("button", { className: "k-ghost", style: { marginTop: 8 }, onClick: () => setStep(step - 1) }, "Geri")))));
+}
+function AddReport({ onSave, onCancel }) {
+    const [picked, setPicked] = useState(null);
+    const [title, setTitle] = useState("");
+    const [instructions, setInstructions] = useState("");
+    const [clock, setClock] = useState("18:00");
+    const choose = (p) => {
+        setPicked(p.key);
+        setTitle(p.key === "custom" ? "" : p.title);
+        setInstructions(p.instructions);
+        setClock(p.clock);
+    };
+    const ready = title.trim() && instructions.trim().length >= 15;
+    return (React.createElement("div", { className: "k-body" },
+        React.createElement("button", { className: "k-clip", style: { marginBottom: 14 }, onClick: onCancel }, "\u2190 Raporlar"),
+        React.createElement("h2", { className: "k-h2" }, "Yeni rapor"),
+        React.createElement("p", { className: "k-sub" }, "Rapor konusunu yaz\u0131n, her g\u00FCn tan\u0131mlanan saatte haz\u0131rlan\u0131r."),
+        PRESETS.map((p) => (React.createElement("button", { key: p.key, className: `k-preset ${picked === p.key ? "on" : ""}`, onClick: () => choose(p) },
+            React.createElement("b", null, p.title),
+            React.createElement("span", null, p.desc)))),
+        picked && (React.createElement("div", { style: { marginTop: 20 } },
+            React.createElement("div", { className: "k-field" },
+                React.createElement("label", { className: "k-label", htmlFor: "k-title" }, "Rapor ad\u0131"),
+                React.createElement("input", { id: "k-title", className: "k-text", value: title, placeholder: "Vardiya Giri\u015F-\u00C7\u0131k\u0131\u015F Raporu", onChange: (e) => setTitle(e.target.value) })),
+            React.createElement("div", { className: "k-field" },
+                React.createElement("label", { className: "k-label", htmlFor: "k-ins" }, "Ne raporlayay\u0131m?"),
+                React.createElement("p", { className: "k-hint" }, "Ne kadar a\u00E7\u0131k yazarsan\u0131z rapor o kadar isabetli olur."),
+                React.createElement("textarea", { id: "k-ins", className: "k-text", rows: 5, value: instructions, placeholder: "Vardiya giri\u015F ve \u00E7\u0131k\u0131\u015Flar\u0131n\u0131 saatiyle listele. Mesai d\u0131\u015F\u0131 giri\u015Fleri ayr\u0131 yaz.", onChange: (e) => setInstructions(e.target.value) })),
+            React.createElement("div", { className: "k-field" },
+                React.createElement("label", { className: "k-label", htmlFor: "k-clock" }, "Hangi saatte haz\u0131rlans\u0131n?"),
+                React.createElement("input", { id: "k-clock", className: "k-text", type: "time", value: clock, onChange: (e) => setClock(e.target.value), style: { width: 140 } })),
+            React.createElement("button", { className: "k-primary", disabled: !ready, onClick: () => onSave({ id: `t${Date.now()}`, clock, title: title.trim(),
+                    freq: "Her gün · son 24 saat", on: true }) }, "Raporu ekle"),
+            React.createElement("button", { className: "k-ghost", style: { marginTop: 8 }, onClick: onCancel }, "Vazge\u00E7")))));
+}
+/* ===================== ikonlar ===================== */
+const Icon = {
+    live: React.createElement("path", { d: "M2 6h20v12H2z M8 12h8", strokeWidth: "1.6" }),
+    events: React.createElement("path", { d: "M4 6h16 M4 12h16 M4 18h10", strokeWidth: "1.6" }),
+    reports: React.createElement("path", { d: "M6 3h9l4 4v14H6z M15 3v5h4", strokeWidth: "1.6" }),
+    chat: React.createElement("path", { d: "M4 5h16v11H9l-5 4z", strokeWidth: "1.6" }),
+    team: React.createElement("path", { d: "M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7z M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6 M17 8h5 M19.5 5.5v5", strokeWidth: "1.6" }),
+};
+/* ===================== kök ===================== */
+function KestrionPanel() {
+    const [tab, setTab] = useState("live");
+    const [stage, setStage] = useState("login"); // login | setup | app
+    const [uploading, setUploading] = useState(false);
+    const [tasks, setTasks] = useState(TASKS);
+    const [openReport, setOpenReport] = useState(null);
+    const [addingReport, setAddingReport] = useState(false);
+    const [accountSection, setAccountSection] = useState("billing");
+    const [sub, setSub] = useState({ status: "trialing", plan: "pro", interval: "monthly", trialDaysLeft: 11 });
+    const [siteIdx, setSiteIdx] = useState(0);
+    const [sitePick, setSitePick] = useState(false);
+    const [events, setEvents] = useState(SEED_EVENTS);
+    const [heat, setHeat] = useState(() => {
+        const h = {};
+        ROOMS.forEach((r) => { h[r.id] = 0; });
+        ACTIVE_ROOMS.forEach((r) => { h[r.id] = 0.15 + Math.random() * 0.45; });
+        return h;
+    });
+    const [messages, setMessages] = useState([
+        { role: "ai", text: "Kameralar açık, bugün 412 olay kaydedildi. Ne sormak istersiniz?" },
+    ]);
+    // canlı yoğunluk simülasyonu (gerçekte GET /room-heat)
+    useEffect(() => {
+        const id = setInterval(() => {
+            setHeat((prev) => {
+                const next = {};
+                Object.keys(prev).forEach((k) => { next[k] = Math.max(0, prev[k] * 0.9); });
+                for (let n = 0; n < 2; n++) {
+                    const r = ACTIVE_ROOMS[Math.floor(Math.random() * ACTIVE_ROOMS.length)];
+                    next[r.id] = Math.min(1, next[r.id] + 0.3 + Math.random() * 0.35);
+                }
+                return next;
+            });
+        }, 1300);
+        return () => clearInterval(id);
+    }, []);
+    const handleUpload = (file) => {
+        const mb = (file.size / 1024 / 1024).toFixed(1);
+        const idx = messages.length;
+        setUploading(true);
+        setMessages((m) => [...m, { role: "file", text: `${file.name} · ${mb} MB`, progress: 0 }]);
+        let p = 0;
+        const timer = setInterval(() => {
+            p = Math.min(100, p + 8 + Math.random() * 10);
+            setMessages((m) => m.map((msg, i) => (i === idx ? { ...msg, progress: p } : msg)));
+            if (p >= 100) {
+                clearInterval(timer);
+                setTimeout(() => {
+                    setUploading(false);
+                    setMessages((m) => [...m, {
+                            role: "ai",
+                            text: "Kayıt incelendi: 24 dakikada 312 kare tarandı. Sorunuza en yakın üç an — 04:12 rampada bir kişi paletin arkasında duruyor, 11:38 kamera açısının dışına çıkıyor, 16:02 elinde kutuyla dönüyor. Bunlar doğrulanması gereken gözlemlerdir. Rapor 'Kayıt İncelemesi' adıyla kaydedildi.",
+                        }]);
+                }, 700);
+            }
+        }, 420);
+    };
+    const handleSend = (text) => {
+        setMessages((m) => [
+            ...m,
+            { role: "user", text },
+            { role: "ai", text: "Dün 20:00–06:00 arasında girişte üç hareket kayıtlı: 21:14, 23:40 ve 05:22. İlk ikisi vardiya değişimiyle uyumlu. 05:22'deki hareket tek kişi ve 8 dakika içeride kalmış — kaydı açmak ister misiniz?" },
+        ]);
+    };
+    const screens = {
+        live: React.createElement(Live, { heat: heat, events: events, siteIdx: siteIdx, setSiteIdx: setSiteIdx }),
+        events: React.createElement(Events, { events: events }),
+        reports: (React.createElement(Reports, { tasks: tasks, setTasks: setTasks, open: openReport, setOpen: setOpenReport, adding: addingReport, setAdding: setAddingReport })),
+        chat: React.createElement(Chat, { messages: messages, onSend: handleSend, onUpload: handleUpload, uploading: uploading }),
+        team: React.createElement(Account, { sub: sub, setSub: setSub, section: accountSection, setSection: setAccountSection }),
+    };
+    const nav = [
+        ["live", "Canlı"],
+        ["events", "Olaylar"],
+        ["reports", "Raporlar"],
+        ["chat", "Sohbet"],
+        ["team", "Hesap"],
+    ];
+    if (stage === "login") {
+        return (React.createElement("div", { className: "k-root" },
+            React.createElement("style", null, CSS),
+            React.createElement(Login, { heat: heat, onIn: (isNew) => setStage(isNew ? "setup" : "app") })));
+    }
+    return (React.createElement("div", { className: "k-root" },
+        React.createElement("style", null, CSS),
+        React.createElement("header", { className: "k-top" },
+            React.createElement("h1", { className: "k-brand" },
+                "KESTRI",
+                React.createElement("span", null, "O"),
+                "N"),
+            React.createElement("button", { className: "k-site-pick", onClick: () => setSitePick(!sitePick), "aria-expanded": sitePick },
+                React.createElement("span", null, SITES[siteIdx].name),
+                React.createElement("small", null,
+                    SITES[siteIdx].cams,
+                    " kamera"),
+                React.createElement("i", null, sitePick ? "▴" : "▾"))),
+        sitePick && (React.createElement("div", { className: "k-site-menu", role: "listbox" },
+            React.createElement("div", { className: "k-site-menu-head" },
+                "TES\u0130SLER \u00B7 GRUP TOPLAMI ",
+                SITE_TOTAL,
+                " KAMERA"),
+            SITES.map((st, i) => (React.createElement("button", { key: st.name, role: "option", "aria-selected": i === siteIdx, className: i === siteIdx ? "on" : "", onClick: () => { setSiteIdx(i); setSitePick(false); } },
+                React.createElement("span", { className: `k-dot ${st.down ? "error" : "online"}` }),
+                React.createElement("div", null,
+                    React.createElement("div", null, st.name),
+                    React.createElement("div", { className: "k-cam-meta" },
+                        st.cams - st.down,
+                        "/",
+                        st.cams,
+                        " kamera \u00B7 son 24 saat ",
+                        st.events,
+                        " olay")),
+                st.alerts > 0 && React.createElement("span", { className: "k-site-alerts" }, st.alerts)))))),
+        stage === "app" && sub.status === "trialing" && !(tab === "team" && accountSection === "billing") && (React.createElement("button", { className: `k-trial ${sub.trialDaysLeft <= 3 ? "alarm" : ""}`, onClick: () => { setTab("team"); setAccountSection("billing"); } },
+            React.createElement("b", null,
+                sub.trialDaysLeft,
+                " g\u00FCn"),
+            React.createElement("span", null, "deneme s\u00FCren kald\u0131"),
+            React.createElement("span", null, "Plan se\u00E7 \u2192"))),
+        stage === "setup" && React.createElement(Onboarding, { onDone: () => setStage("app") }),
+        stage === "app" && screens[tab],
+        stage === "app" && (React.createElement("nav", { className: "k-nav" }, nav.map(([key, label]) => (React.createElement("button", { key: key, className: tab === key ? "on" : "", onClick: () => { setTab(key); setOpenReport(null); setAddingReport(false); } },
+            React.createElement("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }, Icon[key]),
+            label,
+            key === "events" && React.createElement("span", { className: "k-badge" }, "3"))))))));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(KestrionPanel));
+</script>
+
+</body>
+</html>
